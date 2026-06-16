@@ -1,16 +1,16 @@
-# 基于Qwen3-8B的轨迹预测系统
+# 基于Qwen3-4B的轨迹预测系统
 
 > 微调 → 量化加速 → NVIDIA Orin端侧部署 全链路实现
 
 ## 项目简介
 
-本项目基于Qwen3-8B大语言模型，实现一个完整的轨迹预测系统。通过将轨迹预测建模为文本生成任务，利用LLM的语义理解能力进行可解释的轨迹预测，并通过量化加速在NVIDIA Jetson Orin上实现实时推理。
+本项目基于Qwen3-4B大语言模型，实现一个完整的轨迹预测系统。通过将轨迹预测建模为文本生成任务，利用LLM的语义理解能力进行可解释的轨迹预测，并通过量化加速在NVIDIA Jetson Orin上实现实时推理。
 
 ## 核心特性
 
-- **LLM驱动**：基于Qwen3-8B微调，支持自然语言解释预测结果
-- **轻量微调**：使用QLoRA 4-bit，单张RTX 3070即可完成训练
-- **量化加速**：AWQ/GGUF 4-bit量化，模型压缩至4GB
+- **LLM驱动**：基于Qwen3-4B微调，支持自然语言解释预测结果
+- **轻量微调**：使用QLoRA 4-bit，单张RTX 3070（8GB）即可完成训练
+- **量化加速**：AWQ/GGUF 4-bit量化，模型压缩至2GB
 - **端侧部署**：llama.cpp在Jetson Orin上实时推理
 - **交互式Demo**：Gradio可视化界面，支持在线演示
 
@@ -18,7 +18,7 @@
 
 | 环节 | 技术选型 |
 |------|----------|
-| 基座模型 | Qwen3-8B |
+| 基座模型 | Qwen3-4B |
 | 微调框架 | ms-swift (QLoRA 4-bit) |
 | 数据集 | ETH/UCY + TrajNet++ + 合成数据 |
 | 量化 | AWQ 4-bit / GGUF Q4_K_M |
@@ -32,7 +32,7 @@
 
 - Python 3.10+
 - CUDA 11.8+
-- RTX 3070 (24GB) 或更高
+- RTX 3070 (8GB) 或更高
 
 ### 安装依赖
 
@@ -60,10 +60,10 @@ python scripts/data_prep/preprocess.py --output data/processed/trajectory_sft.js
 ```bash
 # QLoRA微调
 swift sft \
-    --model Qwen/Qwen3-8B \
+    --model Qwen/Qwen3-4B \
     --tuner_type lora \
     --dataset data/processed/trajectory_sft.json \
-    --output_dir outputs/qwen3-8b-trajectory-lora \
+    --output_dir outputs/qwen3-4b-trajectory-lora \
     --num_train_epochs 3
 ```
 

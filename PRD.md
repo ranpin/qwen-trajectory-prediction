@@ -1,4 +1,4 @@
-# PRD: 基于Qwen3-8B的轨迹预测系统
+# PRD: 基于Qwen3-4B的轨迹预测系统
 
 > 版本: v1.0 | 日期: 2026-06-16 | 作者: ranpin
 
@@ -8,7 +8,7 @@
 
 ### 1.1 项目目标
 
-构建一个完整的轨迹预测系统，基于Qwen3-8B大语言模型微调，实现从数据准备到NVIDIA Orin端侧部署的全链路闭环。
+构建一个完整的轨迹预测系统，基于Qwen3-4B大语言模型微调，实现从数据准备到NVIDIA Orin端侧部署的全链路闭环。
 
 ### 1.2 核心价值
 
@@ -21,10 +21,10 @@
 
 | 环节 | 选型 | 说明 |
 |------|------|------|
-| 基座模型 | Qwen3-8B | 参数量适中，3070可微调 |
+| 基座模型 | Qwen3-4B | 参数量适中，8GB显存可微调 |
 | 数据集 | ETH/UCY + TrajNet++ + 合成数据 | 总量<200MB，适合有限算力 |
 | 微调框架 | ms-swift | Qwen官方维护，原生支持LoRA |
-| 微调方法 | QLoRA 4-bit | 24GB VRAM可行 |
+| 微调方法 | QLoRA 4-bit | 8GB VRAM可行 |
 | 量化 | AWQ 4-bit / GGUF Q4_K_M | 精度与速度平衡 |
 | 推理引擎 | llama.cpp | Orin上最灵活，CPU+GPU混合推理 |
 | 部署目标 | NVIDIA Jetson AGX Orin 64GB | 统一内存架构 |
@@ -46,7 +46,7 @@
 
 #### 为什么选择这些数据集？
 
-1. **硬件适配**：3070显卡（24GB VRAM）无法处理nuScenes（300GB）或Waymo（500GB+）
+1. **硬件适配**：3070显卡（8GB VRAM）无法处理nuScenes（300GB）或Waymo（500GB+）
 2. **LLM友好**：纯坐标文本格式，天然适合序列化为prompt-completion对
 3. **快速迭代**：数据集小，训练快，便于实验调参
 
@@ -105,7 +105,7 @@
 
 | 资源 | 规格 |
 |------|------|
-| GPU | RTX 3070 (24GB VRAM) |
+| GPU | RTX 3070 (8GB VRAM) |
 | CPU | 8核+ |
 | RAM | 32GB+ |
 | 存储 | 500GB+ SSD |
@@ -118,7 +118,7 @@ pip install ms-swift -U
 
 # QLoRA微调命令
 swift sft \
-    --model Qwen/Qwen3-8B \
+    --model Qwen/Qwen3-4B \
     --tuner_type lora \
     --dataset ./data/processed/trajectory_sft.json \
     --learning_rate 1e-4 \
@@ -126,12 +126,12 @@ swift sft \
     --lora_alpha 32 \
     --target_modules all-linear \
     --num_train_epochs 3 \
-    --per_device_train_batch_size 2 \
-    --gradient_accumulation_steps 8 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 16 \
     --max_length 2048 \
     --quantization_bit 4 \
     --torch_dtype bfloat16 \
-    --output_dir ./outputs/qwen3-8b-trajectory-lora
+    --output_dir ./outputs/qwen3-4b-trajectory-lora
 ```
 
 ### 3.3 关键超参数
@@ -142,8 +142,8 @@ swift sft \
 | lora_alpha | 32 | 通常为rank的2倍 |
 | learning_rate | 1e-4 | LoRA推荐学习率 |
 | epochs | 3-5 | 防止过拟合 |
-| batch_size | 2 | 3070内存限制 |
-| grad_accum | 8 | 有效batch=16 |
+| batch_size | 1 | 8GB显存限制 |
+| grad_accum | 16 | 有效batch=16 |
 | max_length | 2048 | 轨迹文本长度 |
 | quantization_bit | 4 | QLoRA 4-bit量化 |
 
@@ -196,8 +196,8 @@ python -c "
 from awq import AutoAWQForCausalLM
 from transformers import AutoTokenizer
 
-model_path = './outputs/qwen3-8b-trajectory-lora/merged'
-quant_path = './outputs/qwen3-8b-trajectory-awq'
+model_path = './outputs/qwen3-4b-trajectory-lora/merged'
+quant_path = './outputs/qwen3-4b-trajectory-awq'
 
 model = AutoAWQForCausalLM.from_pretrained(model_path)
 tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -227,9 +227,9 @@ python convert_hf_to_gguf.py /path/to/model --outfile model-f16.gguf --outtype f
 
 | 版本 | 大小 | 推理速度（估算） | 精度损失 |
 |------|------|------------------|----------|
-| FP16 | 16GB | 基准 | 0% |
-| AWQ-4bit | 4GB | 2-3x加速 | <2% |
-| GGUF-Q4_K_M | 4.5GB | 1.5-2x加速 | <3% |
+| FP16 | 8GB | 基准 | 0% |
+| AWQ-4bit | 2GB | 2-3x加速 | <2% |
+| GGUF-Q4_K_M | 2.3GB | 1.5-2x加速 | <3% |
 
 ---
 
@@ -311,7 +311,7 @@ scp model-q4_k_m.gguf orin:/path/to/models/
 curl http://orin-ip:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen3-8b-trajectory",
+    "model": "qwen3-4b-trajectory",
     "messages": [
       {"role": "user", "content": "场景：直行道\n车辆历史轨迹：..."}
     ],
@@ -360,7 +360,7 @@ def predict_trajectory(scene_desc, history_traj, pred_horizon):
     response = requests.post(
         "http://orin-ip:8080/v1/chat/completions",
         json={
-            "model": "qwen3-8b-trajectory",
+            "model": "qwen3-4b-trajectory",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 1024
         }
@@ -377,7 +377,7 @@ def predict_trajectory(scene_desc, history_traj, pred_horizon):
 
 # Gradio界面
 with gr.Blocks(title="Qwen轨迹预测系统") as demo:
-    gr.Markdown("# 🚗 基于Qwen3-8B的轨迹预测系统")
+    gr.Markdown("# 🚗 基于Qwen3-4B的轨迹预测系统")
     gr.Markdown("### 微调 → 量化 → Orin部署 全链路Demo")
     
     with gr.Row():
@@ -426,17 +426,17 @@ demo.launch(server_name="0.0.0.0", server_port=7860, share=True)
 | 任务 | 交付物 | 验收标准 |
 |------|--------|----------|
 | 配置ms-swift环境 | requirements.txt | 可复现安装 |
-| 合成数据预训练 | outputs/qwen3-8b-synthetic/ | loss收敛 |
-| 真实数据微调 | outputs/qwen3-8b-trajectory-lora/ | minADE<0.8m |
-| 模型合并 | outputs/qwen3-8b-merged/ | 可正常加载 |
+| 合成数据预训练 | outputs/qwen3-4b-synthetic/ | loss收敛 |
+| 真实数据微调 | outputs/qwen3-4b-trajectory-lora/ | minADE<0.8m |
+| 模型合并 | outputs/qwen3-4b-merged/ | 可正常加载 |
 | 评估报告 | docs/evaluation.md | 指标达标 |
 
 ### Phase 3: 量化加速（1周）
 
 | 任务 | 交付物 | 验收标准 |
 |------|--------|----------|
-| AWQ量化 | outputs/qwen3-8b-awq/ | 模型<5GB |
-| GGUF量化 | outputs/qwen3-8b-q4_k_m.gguf | 可被llama.cpp加载 |
+| AWQ量化 | outputs/qwen3-4b-awq/ | 模型<3GB |
+| GGUF量化 | outputs/qwen3-4b-q4_k_m.gguf | 可被llama.cpp加载 |
 | 量化精度评估 | docs/quantization_eval.md | 精度损失<3% |
 | 推理速度测试 | scripts/eval/benchmark.py | 延迟<500ms |
 
