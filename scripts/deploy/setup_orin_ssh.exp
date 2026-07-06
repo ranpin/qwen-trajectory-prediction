@@ -1,0 +1,37 @@
+#!/usr/bin/expect -f
+# Copies the local SSH public key to the Orin. Reads connection details from the
+# environment so no host/credential is hardcoded in source. Set them first, e.g.
+#   set -a && . configs/deploy.env && set +a
+#   export ORIN_SSH_PASSWORD=...   # not stored in the repo
+set timeout 30
+
+if {![info exists env(ORIN_HOST)] || ![info exists env(ORIN_SSH_USER)]} {
+    puts "ERROR: set ORIN_HOST and ORIN_SSH_USER (see configs/deploy.env)"
+    exit 1
+}
+if {![info exists env(ORIN_SSH_PASSWORD)]} {
+    puts "ERROR: set ORIN_SSH_PASSWORD in your environment (do not commit it)"
+    exit 1
+}
+set host $env(ORIN_HOST)
+set user $env(ORIN_SSH_USER)
+set password $env(ORIN_SSH_PASSWORD)
+
+spawn ssh-copy-id -o StrictHostKeyChecking=no $user@$host
+expect {
+    "password:" {
+        send "$password\r"
+        expect {
+            "added:" {
+                puts "SSH key successfully copied"
+            }
+            timeout {
+                puts "Timeout waiting for confirmation"
+            }
+        }
+    }
+    timeout {
+        puts "Timeout waiting for password prompt"
+    }
+}
+expect eof

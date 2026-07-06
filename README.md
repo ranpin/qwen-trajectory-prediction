@@ -20,7 +20,7 @@
 |------|----------|
 | 基座模型 | Qwen3-4B |
 | 微调框架 | ms-swift (QLoRA 4-bit) |
-| 数据集 | ETH/UCY + TrajNet++ + 合成数据 |
+| 数据集 | ETH/UCY + TrajNet++ + 合成数据（50000样本） |
 | 量化 | AWQ 4-bit / GGUF Q4_K_M |
 | 推理引擎 | llama.cpp |
 | 部署目标 | NVIDIA Jetson AGX Orin 64GB |
@@ -110,12 +110,40 @@ qwen-trajectory-prediction/
 
 ## 评估指标
 
+目标值：
+
 | 指标 | 目标值 |
 |------|--------|
-| minADE | <0.5m |
-| minFDE | <1.0m |
+| ADE | <0.5m |
+| FDE | <1.0m |
 | Miss Rate | <20% |
 | 推理延迟 | <300ms (Orin) |
+
+### 实际评估结果
+
+> 说明：下表为**单次预测（single-prediction）** 的 ADE/FDE，**不是**文献常用的
+> best-of-K（minADE_K / minFDE_K）指标，不可直接与 best-of-20 榜单对比。
+> 误差均值附 95% 置信区间；评估脚本按 prompt 文本对齐预测与真值。
+
+| 测试集 | 样本(评估/预测) | ADE 均值 | FDE 均值 | Miss Rate(>2m) | 解析失败 |
+|--------|----------------|----------|----------|----------------|----------|
+| 合成 (全量 200) | 190/200 | 0.82 ± 0.29 m (中位 0.33) | 1.37 ± 0.39 m (中位 0.69) | 12.1% | 10 |
+| ETH/UCY 真实 (分层抽样 150) | 141/147 | 0.79 ± 0.17 m (中位 0.49) | 1.62 ± 0.35 m (中位 0.82) | 24.1% | 6 |
+
+复现真实数据评估：
+
+```bash
+python scripts/data_prep/download_datasets.py     # 下载 ETH/UCY 到 data/raw
+python scripts/data_prep/preprocess.py            # 生成 data/processed/trajectory_test.jsonl
+set -a && . configs/deploy.env && set +a          # 配置 ORIN_API_URL
+python scripts/evaluation/generate_predictions.py \
+    --test_file data/processed/eth_ucy_test_sample.jsonl \
+    --output_file data/processed/eth_ucy_predictions.jsonl --max_samples 150
+python scripts/evaluation/evaluate.py \
+    --test_file data/processed/eth_ucy_test_sample.jsonl \
+    --predictions_file data/processed/eth_ucy_predictions.jsonl \
+    --output_file outputs/eval_results_eth_ucy.json
+```
 
 ## 文档
 
@@ -127,11 +155,12 @@ qwen-trajectory-prediction/
 
 - [x] 项目调研与规划
 - [x] GitHub仓库创建
-- [ ] 数据准备与预处理
-- [ ] 模型微调
-- [ ] 量化加速
-- [ ] Orin部署
-- [ ] Demo开发
+- [x] 数据准备与预处理（合成 + ETH/UCY）
+- [x] 模型微调（QLoRA）
+- [x] 量化加速（GGUF Q4_K_M）
+- [x] Orin部署（llama.cpp 服务）
+- [x] Demo开发（Gradio）
+- [x] 模型评估（合成 + 真实基准）
 - [ ] 文档完善
 
 ## 许可证

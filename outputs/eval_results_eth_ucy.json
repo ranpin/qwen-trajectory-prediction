@@ -1,0 +1,22 @@
+{
+  "label": "ETH/UCY real test (150-sample stratified, single-pred)",
+  "num_predictions": 147,
+  "num_evaluated": 141,
+  "unmatched": 0,
+  "parse_failures": 6,
+  "length_mismatches": 3,
+  "metric_note": "single-prediction ADE/FDE, not best-of-K minADE",
+  "meanADE": 0.7894552178395174,
+  "meanADE_ci95": 0.1678206665613219,
+  "medianADE": 0.49066031389841996,
+  "meanFDE": 1.6167807629311306,
+  "meanFDE_ci95": 0.35176445362792214,
+  "medianFDE": 0.8221921916437789,
+  "minADE": 0.0,
+  "maxADE": 5.453736854971984,
+  "stdADE": 1.0167142877672763,
+  "minFDE": 0.0,
+  "maxFDE": 10.51445195908945,
+  "stdFDE": 2.1311078859377215,
+  "miss_rate_2m": 0.24113475177304963
+}

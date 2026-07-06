@@ -1,0 +1,22 @@
+{
+  "label": "Synthetic test (full 200, single-pred)",
+  "num_predictions": 200,
+  "num_evaluated": 190,
+  "unmatched": 0,
+  "parse_failures": 10,
+  "length_mismatches": 22,
+  "metric_note": "single-prediction ADE/FDE, not best-of-K minADE",
+  "meanADE": 0.8222023317686954,
+  "meanADE_ci95": 0.28757300193167346,
+  "medianADE": 0.32900834451847905,
+  "meanFDE": 1.3659466954978687,
+  "meanFDE_ci95": 0.3924674425712037,
+  "medianFDE": 0.6931107692859552,
+  "minADE": 0.03044311205875239,
+  "maxADE": 16.556427337539535,
+  "stdADE": 2.022408305311797,
+  "minFDE": 0.014142135623730649,
+  "maxFDE": 25.456979396621275,
+  "stdFDE": 2.760097123474307,
+  "miss_rate_2m": 0.12105263157894737
+}
