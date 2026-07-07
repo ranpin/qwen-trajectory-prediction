@@ -59,8 +59,10 @@ def main():
     print(f"Step 1: Converting to FP16 GGUF...")
     convert_script = llama_cpp_path / "convert_hf_to_gguf.py"
 
+    # Use the current interpreter (the venv) so the convert script's deps
+    # (gguf/torch/safetensors) resolve — system python3 usually lacks them.
     subprocess.run([
-        "python3", str(convert_script),
+        sys.executable, str(convert_script),
         str(model_path),
         "--outfile", str(f16_path),
         "--outtype", "f16"
