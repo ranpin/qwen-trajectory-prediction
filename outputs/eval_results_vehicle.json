@@ -1,0 +1,22 @@
+{
+  "label": "synthetic-vehicle LLM (translate_rotate)",
+  "num_predictions": 148,
+  "num_evaluated": 148,
+  "unmatched": 0,
+  "parse_failures": 0,
+  "length_mismatches": 0,
+  "metric_note": "single-prediction ADE/FDE, not best-of-K minADE",
+  "meanADE": 1.580358783206255,
+  "meanADE_ci95": 0.16822723878162066,
+  "medianADE": 1.2670680697383583,
+  "meanFDE": 3.430528256827374,
+  "meanFDE_ci95": 0.39566898520977084,
+  "medianFDE": 3.028353943521817,
+  "minADE": 0.19208538402373712,
+  "maxADE": 4.683097062387102,
+  "stdADE": 1.044169739424871,
+  "minFDE": 0.14035668847618135,
+  "maxFDE": 12.270688652231392,
+  "stdFDE": 2.4558780384031778,
+  "miss_rate_2m": 0.6824324324324325
+}

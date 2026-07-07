@@ -120,7 +120,7 @@ qwen-trajectory-prediction/
 
 | 测试集 | LLM ADE | CVM ADE | LLM FDE | CVM FDE | LLM MR | CVM MR |
 |--------|---------|---------|---------|---------|--------|--------|
-| 合成车辆 (200, translate_rotate) | 🔄 训练中 | 7.53 | 🔄 训练中 | 15.29 | 🔄 | 66.5% |
+| 合成车辆 (148/200, translate_rotate) | **1.58 ± 0.17** | 7.41 | **3.43 ± 0.40** | 15.29 | 68.2% | 66.5% |
 | NGSIM 真实车辆 | ⏳ 待数据 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 
 行人（兼容）：
@@ -134,9 +134,11 @@ qwen-trajectory-prediction/
 > ⚠️ **关键发现（行人真实数据）**：匀速基线(CVM)反超 LLM，LLM 仅在自身合成分布上占优。
 > **坐标归一化重训未能翻盘**：归一化后 ADE 0.79→0.81、MR 24%→32%（不升反微降），仍明显不及 CVM 0.65。
 > 说明 agent-centric 归一化不是症结；纯文本 LLM（不喂地图）在真实行人数据上难敌平凡外推。
-> **车辆同理需警惕**：高速车辆近似匀速，CVM 极强（合成 NGSIM 格式上 CVM ADE 仅约 0.16m）。
+> **车辆（合成）**：LLM ADE 1.58 vs CVM 7.41 —— LLM 大胜（学到了转弯/变道/加减速，CVM 只会直线外推）。
+> 但这是**同分布**优势；**真实高速数据（NGSIM）才是决定性检验**：高速近似匀速、CVM 极强
+> （合成 NGSIM 直行格式上 CVM ADE 仅约 0.16m），纯文本 LLM 不喂地图大概率难赢——该评估仍待数据。
 > 指标为**单次预测**（非 best-of-K）；方法学与复现见 [docs/technical.md](docs/technical.md)。
-> 🔄 = 车辆/评估进行中；⏳ = 待 NGSIM 数据（data.transportation.gov 对数据中心 IP 返回 403，需手动下载）。
+> ⏳ = 待 NGSIM 真实数据（data.transportation.gov 对数据中心 IP 返回 403，需手动下载）。
 
 ## 文档
 
@@ -153,7 +155,7 @@ qwen-trajectory-prediction/
 - [x] 模型微调（QLoRA）+ 量化（GGUF Q4_K_M）
 - [x] Orin 部署 + Demo（Gradio，agent 类型 + CVM 基线）
 - [x] CVM 基线（车辆 + 行人）
-- [ ] 车辆模型重训 + 评估（进行中，pc-3070）
+- [x] 车辆模型重训 + 评估（合成：LLM ADE 1.58 vs CVM 7.41）
 - [ ] 行人归一化重训评估（待 Orin 部署）
 - [ ] 真实车辆（NGSIM）评估（待手动下载数据）
 
