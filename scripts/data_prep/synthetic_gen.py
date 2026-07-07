@@ -21,6 +21,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 from trajectory_norm import normalize_obs_pred, MODES  # noqa: E402
+from prompt_format import build_user_prompt  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "synthetic"
 PROC_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
@@ -194,17 +195,11 @@ def generate_one_sample(normalize="none"):
     heading = math.atan2(obs[-1, 1] - obs[0, 1], obs[-1, 0] - obs[0, 0])
     dir_label = _direction_label(heading)
 
-    obs_text = format_coords(obs.tolist())
     pred_text = format_coords(pred.tolist(), time_offset=OBS_LENGTH * FRAME_INTERVAL)
     speed_desc, dir_desc = generate_analysis(obs, pred)
 
-    user_msg = (
-        f"场景：{scene}\n"
-        f"行人历史轨迹（过去{OBS_LENGTH * FRAME_INTERVAL:.1f}秒，每{FRAME_INTERVAL}秒采样）：\n"
-        f"{obs_text}\n"
-        f"平均速度：{avg_speed}m/s，主要方向：{dir_label}\n\n"
-        f"请预测该行人未来{PRED_LENGTH * FRAME_INTERVAL:.1f}秒的轨迹。"
-    )
+    # Canonical prompt builder (shared with the demo) prevents format drift.
+    user_msg = build_user_prompt(obs.tolist(), scene, avg_speed, dir_label)
 
     assistant_msg = (
         f"根据行人的运动趋势分析：\n"

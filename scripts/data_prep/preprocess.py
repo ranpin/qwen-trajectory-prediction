@@ -18,6 +18,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 from trajectory_norm import normalize_obs_pred, MODES  # noqa: E402
+from prompt_format import build_user_prompt  # noqa: E402
 
 RAW_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "raw" / "eth_ucy"
 OUT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
@@ -150,16 +151,11 @@ def format_coords(coords: list, time_offset: float = 0.0) -> str:
 
 def sample_to_chat(sample: dict) -> dict:
     """Convert a sample to ms-swift chat format."""
-    obs_text = format_coords(sample["obs"])
     pred_text = format_coords(sample["pred"], time_offset=OBS_LENGTH * FRAME_INTERVAL)
 
-    user_msg = (
-        f"场景：{sample['scene']}（行人密集区域）\n"
-        f"行人历史轨迹（过去{OBS_LENGTH * FRAME_INTERVAL:.1f}秒，每{FRAME_INTERVAL}秒采样）：\n"
-        f"{obs_text}\n"
-        f"平均速度：{sample['avg_speed']}m/s，主要方向：{sample['direction']}\n\n"
-        f"请预测该行人未来{PRED_LENGTH * FRAME_INTERVAL:.1f}秒的轨迹。"
-    )
+    # Canonical prompt builder (shared with the demo) prevents format drift.
+    user_msg = build_user_prompt(sample["obs"], f"{sample['scene']}（行人密集区域）",
+                                 sample["avg_speed"], sample["direction"])
 
     # Compute analysis based on trajectory
     obs = np.array(sample["obs"])
