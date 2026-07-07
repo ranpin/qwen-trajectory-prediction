@@ -1,0 +1,22 @@
+{
+  "label": "ETH/UCY translate_rotate (LLM)",
+  "num_predictions": 149,
+  "num_evaluated": 98,
+  "unmatched": 0,
+  "parse_failures": 51,
+  "length_mismatches": 12,
+  "metric_note": "single-prediction ADE/FDE, not best-of-K minADE",
+  "meanADE": 0.8050010614525389,
+  "meanADE_ci95": 0.1834047813031829,
+  "medianADE": 0.4873894292318345,
+  "meanFDE": 1.7325003739615235,
+  "meanFDE_ci95": 0.3967725762179079,
+  "medianFDE": 0.9525492167512526,
+  "minADE": 0.0,
+  "maxADE": 5.592006132802606,
+  "stdADE": 0.9263340325822598,
+  "minFDE": 0.0,
+  "maxFDE": 10.009220748889495,
+  "stdFDE": 2.0040041373752784,
+  "miss_rate_2m": 0.3163265306122449
+}
