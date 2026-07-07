@@ -182,7 +182,7 @@ def create_demo(api_url, model, normalize):
                                  "\n".join(f"t={i*0.4:.1f}s: ({2.3+0.2*i:.2f}, {4.5+0.3*i:.2f})"
                                            for i in range(OBS_LENGTH)))
 
-    with gr.Blocks(title="Qwen3-4B 轨迹预测系统", theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="Qwen3-4B 轨迹预测系统") as demo:
         gr.Markdown("# 🚶 基于 Qwen3-4B 的行人轨迹预测")
         gr.Markdown("### 微调 → 量化 → Orin 部署 全链路 Demo（含 CVM 基线对比）")
 
@@ -238,7 +238,8 @@ def main():
     args = parser.parse_args()
 
     demo = create_demo(args.api_url, args.model, args.normalize)
-    demo.launch(server_name=args.server, server_port=args.port, share=args.share)
+    demo.launch(server_name=args.server, server_port=args.port, share=args.share,
+                theme=gr.themes.Soft())
 
 
 if __name__ == "__main__":

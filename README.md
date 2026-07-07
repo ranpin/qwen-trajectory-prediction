@@ -20,7 +20,7 @@
 |------|----------|
 | 基座模型 | Qwen3-4B |
 | 微调框架 | ms-swift (QLoRA 4-bit) |
-| 数据集 | ETH/UCY + TrajNet++ + 合成数据（50000样本） |
+| 数据集 | ETH/UCY（真实评估）+ 合成数据（训练，50000 样本）|
 | 量化 | AWQ 4-bit / GGUF Q4_K_M |
 | 推理引擎 | llama.cpp |
 | 部署目标 | NVIDIA Jetson AGX Orin 64GB |
@@ -42,48 +42,33 @@ cd qwen-trajectory-prediction
 pip install -r requirements.txt
 ```
 
+> 完整参数、设计与方法学见 [docs/technical.md](docs/technical.md)。
+
 ### 数据准备
 
 ```bash
-# 下载数据集
-bash scripts/data_prep/download_datasets.sh
-
-# 生成合成数据
-python scripts/data_prep/synthetic_gen.py --num_samples 100000
-
-# 序列化为训练格式
-python scripts/data_prep/preprocess.py --output data/processed/trajectory_sft.json
+python scripts/data_prep/download_datasets.py                       # 下载 ETH/UCY
+python scripts/data_prep/preprocess.py                             # 真实数据 -> chat 格式
+python scripts/data_prep/synthetic_gen.py --num_samples 50000      # 生成合成训练数据
+# 可加 --normalize translate_rotate 生成 agent-centric 归一化数据
 ```
 
-### 模型微调
+### 微调 → 量化 → 部署（在 pc-3070 上）
 
 ```bash
-# QLoRA微调
-swift sft \
-    --model Qwen/Qwen3-4B \
-    --tuner_type lora \
-    --dataset data/processed/trajectory_sft.json \
-    --output_dir outputs/qwen3-4b-trajectory-lora \
-    --num_train_epochs 3
+bash scripts/training/train_synthetic.sh                           # QLoRA 训练 + 合并
+python scripts/training/quantize_gguf.py \
+    --model_path outputs/qwen3-4b-synthetic-lora-merged --quant_type Q4_K_M
+set -a && . configs/deploy.env && set +a                          # 配置 Orin 端点
+bash scripts/deploy/deploy_to_orin.sh outputs/qwen3-4b-q4_k_m.gguf "$ORIN_HOST"
+# 归一化重训一键脚本：bash scripts/training/retrain_normalized.sh translate_rotate
 ```
 
-### 量化与部署
+### 运行 Demo
 
 ```bash
-# AWQ量化
-python scripts/training/quantize_awq.py
-
-# GGUF量化（用于llama.cpp）
-python scripts/training/quantize_gguf.py
-
-# 部署到Orin
-bash scripts/deploy/deploy_to_orin.sh
-```
-
-### 运行Demo
-
-```bash
-python demo/app.py --server 0.0.0.0 --port 7860
+set -a && . configs/deploy.env && set +a
+python demo/app.py --normalize none      # --normalize 需与部署模型一致
 ```
 
 ## 项目结构
@@ -96,9 +81,10 @@ qwen-trajectory-prediction/
 │   └── synthetic/        # 合成数据
 ├── configs/              # 配置文件
 ├── scripts/
+│   ├── common/           # 共享模块（prompt 格式、坐标归一化）
 │   ├── data_prep/        # 数据准备脚本
 │   ├── training/         # 训练和量化脚本
-│   ├── evaluation/       # 评估脚本
+│   ├── evaluation/       # 评估、基线、抽样脚本
 │   └── deploy/           # 部署脚本
 ├── notebooks/            # Jupyter notebooks
 ├── demo/                 # Gradio Demo
@@ -125,31 +111,22 @@ qwen-trajectory-prediction/
 > best-of-K（minADE_K / minFDE_K）指标，不可直接与 best-of-20 榜单对比。
 > 误差均值附 95% 置信区间；评估脚本按 prompt 文本对齐预测与真值。
 
-| 测试集 | 样本(评估/预测) | ADE 均值 | FDE 均值 | Miss Rate(>2m) | 解析失败 |
-|--------|----------------|----------|----------|----------------|----------|
-| 合成 (全量 200) | 190/200 | 0.82 ± 0.29 m (中位 0.33) | 1.37 ± 0.39 m (中位 0.69) | 12.1% | 10 |
-| ETH/UCY 真实 (分层抽样 150) | 141/147 | 0.79 ± 0.17 m (中位 0.49) | 1.62 ± 0.35 m (中位 0.82) | 24.1% | 6 |
+**LLM vs CVM 匀速基线**（同口径）：
 
-复现真实数据评估：
+| 测试集 | LLM ADE | CVM ADE | LLM FDE | CVM FDE | LLM MR | CVM MR |
+|--------|---------|---------|---------|---------|--------|--------|
+| 合成 (190/200) | **0.82 ± 0.29** | 1.53 | **1.37 ± 0.39** | 2.70 | **12.1%** | 48% |
+| ETH/UCY (141/147) | 0.79 ± 0.17 | **0.65** | 1.62 ± 0.35 | **1.38** | 24.1% | **22.7%** |
+| ETH/UCY + 归一化重训 | 🔄 待测 | 0.65 | 🔄 待测 | 1.38 | 🔄 | 22.7% |
 
-```bash
-python scripts/data_prep/download_datasets.py     # 下载 ETH/UCY 到 data/raw
-python scripts/data_prep/preprocess.py            # 生成 data/processed/trajectory_test.jsonl
-set -a && . configs/deploy.env && set +a          # 配置 ORIN_API_URL
-python scripts/evaluation/generate_predictions.py \
-    --test_file data/processed/eth_ucy_test_sample.jsonl \
-    --output_file data/processed/eth_ucy_predictions.jsonl --max_samples 150
-python scripts/evaluation/evaluate.py \
-    --test_file data/processed/eth_ucy_test_sample.jsonl \
-    --predictions_file data/processed/eth_ucy_predictions.jsonl \
-    --output_file outputs/eval_results_eth_ucy.json
-```
+> ⚠️ **关键发现**：真实数据上匀速基线(CVM)反超 LLM；LLM 仅在自身合成分布上占优。
+> 归一化重训（A3）用于验证能否翻盘。方法学、复现命令见
+> [docs/technical.md](docs/technical.md) 第 7–9 节。指标为**单次预测**，非 best-of-K。
 
 ## 文档
 
-- [PRD.md](PRD.md) - 完整产品需求文档
-- [docs/technical.md](docs/technical.md) - 技术架构文档
-- [docs/demo_guide.md](docs/demo_guide.md) - Demo使用指南
+- [PRD.md](PRD.md) — 产品需求（目标、里程碑、风险、方向）
+- [docs/technical.md](docs/technical.md) — 技术细节（架构、数据、训练、量化、部署、评估方法学）
 
 ## 开发计划
 
@@ -160,8 +137,9 @@ python scripts/evaluation/evaluate.py \
 - [x] 量化加速（GGUF Q4_K_M）
 - [x] Orin部署（llama.cpp 服务）
 - [x] Demo开发（Gradio）
-- [x] 模型评估（合成 + 真实基准）
-- [ ] 文档完善
+- [x] 模型评估（合成 + 真实基准 + CVM 基线）
+- [x] 文档完善（PRD / README / technical 三拆）
+- [ ] 坐标归一化重训 A/B（待 pc-3070 执行）
 
 ## 许可证
 
