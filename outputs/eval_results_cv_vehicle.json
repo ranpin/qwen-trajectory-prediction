@@ -1,0 +1,22 @@
+{
+  "label": "CVM / synthetic-vehicle (translate_rotate)",
+  "num_predictions": 200,
+  "num_evaluated": 200,
+  "unmatched": 0,
+  "parse_failures": 0,
+  "length_mismatches": 0,
+  "metric_note": "single-prediction ADE/FDE, not best-of-K minADE",
+  "meanADE": 7.411517691145293,
+  "meanADE_ci95": 0.9874737120374925,
+  "medianADE": 5.50692508216895,
+  "meanFDE": 15.287264272558463,
+  "meanFDE_ci95": 2.269707464010239,
+  "medianFDE": 5.984874514444941,
+  "minADE": 0.12387062568525524,
+  "maxADE": 26.01545062618368,
+  "stdADE": 7.124993449236358,
+  "minFDE": 0.13152946437965457,
+  "maxFDE": 57.2905105580322,
+  "stdFDE": 16.37679121542206,
+  "miss_rate_2m": 0.665
+}
