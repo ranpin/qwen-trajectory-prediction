@@ -116,10 +116,41 @@ def download_trajnetpp():
     print(f"Placeholder saved to {out_dir}")
 
 
+def download_ngsim():
+    """Fetch a NGSIM vehicle-trajectory subset (US DOT open data, feet, 10Hz).
+
+    data.transportation.gov's WAF returns HTTP 403 to datacenter IPs, so the
+    automated fetch often fails. Set a Socrata app token in $SOCRATA_APP_TOKEN to
+    improve the odds; otherwise download the CSV from a browser and drop it here.
+    Any CSV with columns vehicle_id/frame_id/local_x/local_y works with
+    preprocess_ngsim.py.
+    """
+    out_dir = DATA_DIR / "ngsim"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / "ngsim_us101.csv"
+    token = os.environ.get("SOCRATA_APP_TOKEN", "")
+    url = ("https://data.transportation.gov/resource/8ect-6jqj.csv"
+           "?$limit=300000&location=us-101")
+    if token:
+        url += f"&$$app_token={token}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        print(f"Trying NGSIM download -> {dest} ...")
+        with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
+            f.write(r.read())
+        print(f"  Saved {dest} ({dest.stat().st_size/1024/1024:.1f} MB)")
+    except Exception as e:
+        print(f"  Automated fetch failed ({e}).")
+        print("  Manual: download NGSIM 'Vehicle Trajectories' CSV from")
+        print("    https://data.transportation.gov/  (search: NGSIM)")
+        print("  or highD (registration) / rounD, then run:")
+        print(f"    python scripts/data_prep/preprocess_ngsim.py --csv <file.csv>")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Download trajectory datasets")
     parser.add_argument("--datasets", nargs="+", default=["eth_ucy"],
-                        choices=["eth_ucy", "trajnetpp"],
+                        choices=["eth_ucy", "trajnetpp", "ngsim"],
                         help="Which datasets to download")
     args = parser.parse_args()
 
@@ -129,6 +160,8 @@ def main():
         download_eth_ucy()
     if "trajnetpp" in args.datasets:
         download_trajnetpp()
+    if "ngsim" in args.datasets:
+        download_ngsim()
 
     print("\nDone. Dataset summary:")
     for d in DATA_DIR.iterdir():
