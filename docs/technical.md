@@ -1,7 +1,7 @@
 # 技术文档
 
 本文档面向开发者，覆盖架构、数据管线、Prompt 规范、训练、量化、部署、评估方法学。
-产品层面的目标与规划见 [PRD.md](../PRD.md)；快速上手见 [README.md](../README.md)。
+产品层面的目标与规划见 [PRD.md](PRD.md)；快速上手见 [README.md](../README.md)。
 
 ---
 

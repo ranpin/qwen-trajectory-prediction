@@ -88,9 +88,8 @@ qwen-trajectory-prediction/
 │   └── deploy/           # 部署脚本
 ├── notebooks/            # Jupyter notebooks
 ├── demo/                 # Gradio Demo
-├── docs/                 # 文档
+├── docs/                 # 文档（PRD.md、technical.md）
 ├── outputs/              # 模型输出（gitignore）
-├── PRD.md                # 产品需求文档
 └── README.md
 ```
 
@@ -125,7 +124,7 @@ qwen-trajectory-prediction/
 
 ## 文档
 
-- [PRD.md](PRD.md) — 产品需求（目标、里程碑、风险、方向）
+- [docs/PRD.md](docs/PRD.md) — 产品需求（目标、里程碑、风险、方向）
 - [docs/technical.md](docs/technical.md) — 技术细节（架构、数据、训练、量化、部署、评估方法学）
 
 ## 开发计划

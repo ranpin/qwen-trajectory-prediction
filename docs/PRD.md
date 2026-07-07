@@ -1,7 +1,7 @@
 # PRD：基于 Qwen3-4B 的轨迹预测系统
 
 > 版本 v2.0 | 作者 ranpin
-> 产品需求文档。技术实现见 [docs/technical.md](docs/technical.md)，上手见 [README.md](README.md)。
+> 产品需求文档。技术实现见 [technical.md](technical.md)，上手见 [../README.md](../README.md)。
 
 ---
 
