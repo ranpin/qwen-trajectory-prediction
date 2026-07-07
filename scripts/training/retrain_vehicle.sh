@@ -47,12 +47,14 @@ echo "[veh] $(date '+%F %T') merge LoRA"
 CKPT=$(ls -d ${OUTPUT_DIR}/v*/checkpoint-500 2>/dev/null | tail -1)
 [ -z "$CKPT" ] && { echo "no checkpoint found"; exit 1; }
 CUDA_VISIBLE_DEVICES='' swift export \
-    --model "$MODEL_PATH" --adapters "$CKPT" --merge_lora true \
-    --output_dir "${OUTPUT_DIR}-merged"
+    --model "$MODEL_PATH" --adapters "$CKPT" --merge_lora true
+# ms-swift writes the merged model to <adapters>-merged, ignoring --output_dir.
+MERGED="${CKPT}-merged"
+[ -d "$MERGED" ] || { echo "merged model not found at $MERGED"; exit 1; }
 
-echo "[veh] $(date '+%F %T') GGUF Q4_K_M quantize"
+echo "[veh] $(date '+%F %T') GGUF Q4_K_M quantize (from $MERGED)"
 python scripts/training/quantize_gguf.py \
-    --model_path "${OUTPUT_DIR}-merged" \
+    --model_path "$MERGED" \
     --output_path "$GGUF_OUT" --quant_type Q4_K_M
 
 echo "[veh] $(date '+%F %T') DONE_ALL -> $GGUF_OUT"

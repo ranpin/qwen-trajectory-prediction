@@ -28,8 +28,12 @@ python scripts/data_prep/synthetic_gen.py \
 bash scripts/training/train_synthetic.sh
 
 # 3) GGUF Q4_K_M quantize of the merged model.
+#    ms-swift writes the merged model to <checkpoint>-merged (ignoring the
+#    trainer's --output_dir), so locate it there rather than assuming a name.
+MERGED=$(ls -d outputs/qwen3-4b-synthetic-lora/v*/checkpoint-500-merged 2>/dev/null | tail -1)
+[ -z "$MERGED" ] && { echo "merged model not found"; exit 1; }
 python scripts/training/quantize_gguf.py \
-    --model_path outputs/qwen3-4b-synthetic-lora-merged \
+    --model_path "$MERGED" \
     --output_path "$GGUF_OUT" --quant_type Q4_K_M
 
 # 4) Deploy to Orin and (re)start the server.
