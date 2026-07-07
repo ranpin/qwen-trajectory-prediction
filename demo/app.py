@@ -30,13 +30,17 @@ for _name in ["PingFang SC", "Heiti SC", "STHeiti", "Arial Unicode MS",
 plt.rcParams["axes.unicode_minus"] = False
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "common"))
-from prompt_format import (build_user_prompt, SYSTEM_PROMPT,  # noqa: E402
+from prompt_format import (build_user_prompt, system_prompt, AGENT_LABELS,  # noqa: E402
                            FRAME_INTERVAL, OBS_LENGTH, PRED_LENGTH, direction_label)
 from trajectory_norm import compute_transform, apply_transform, invert_transform  # noqa: E402
 
 PRED_MARKER = "预测轨迹"
-PRESET_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "processed",
-                           "eth_ucy_test_sample.jsonl")
+_PROC = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
+# Preset example file per agent type (falls back to manual input if absent).
+PRESET_FILES = {
+    "vehicle": os.path.join(_PROC, "ngsim_test.jsonl"),
+    "pedestrian": os.path.join(_PROC, "eth_ucy_test_sample.jsonl"),
+}
 
 
 # ----------------------------- parsing / physics -----------------------------
@@ -80,12 +84,13 @@ def ade_fde(pred, gt):
 
 
 # --------------------------------- presets -----------------------------------
-def load_presets():
-    """Return {label: {scene, history_text, gt}} from the real test sample."""
+def load_presets(agent_type="vehicle"):
+    """Return {label: {scene, history_text, gt}} from the agent's test sample."""
     presets = {}
-    if not os.path.exists(PRESET_FILE):
+    preset_file = PRESET_FILES.get(agent_type, "")
+    if not preset_file or not os.path.exists(preset_file):
         return presets
-    with open(PRESET_FILE) as f:
+    with open(preset_file) as f:
         for i, line in enumerate(f):
             if i >= 12:
                 break
@@ -124,7 +129,8 @@ def plot_trajectory(obs, llm, cv, gt, scene):
 
 
 # ------------------------------- prediction ----------------------------------
-def predict(scene, history_text, preset_label, normalize, api_url, model, presets):
+def predict(scene, history_text, preset_label, normalize, api_url, model,
+            presets, agent_type="vehicle"):
     obs_world = parse_coords(history_text)
     if obs_world is None or len(obs_world) < 2:
         return plt.figure(), "输入的历史轨迹无法解析（至少需要2个点）。"
@@ -135,14 +141,15 @@ def predict(scene, history_text, preset_label, normalize, api_url, model, preset
     origin, angle = compute_transform(obs_world, normalize)
     obs_feed = apply_transform(obs_world, origin, angle)
     avg_speed, dir_label = speed_and_direction(obs_feed)
-    prompt = build_user_prompt(obs_feed, scene, avg_speed, dir_label)
+    prompt = build_user_prompt(obs_feed, scene, avg_speed, dir_label,
+                               agent_label=AGENT_LABELS[agent_type])
 
     t0 = time.time()
     try:
         resp = requests.post(
             f"{api_url}/v1/chat/completions",
             json={"model": model,
-                  "messages": [{"role": "system", "content": SYSTEM_PROMPT},
+                  "messages": [{"role": "system", "content": system_prompt(agent_type)},
                                {"role": "user", "content": prompt}],
                   "max_tokens": 512, "temperature": 0.1},
             timeout=60)
@@ -174,28 +181,34 @@ def predict(scene, history_text, preset_label, normalize, api_url, model, preset
 
 
 # --------------------------------- UI ----------------------------------------
-def create_demo(api_url, model, normalize):
-    presets = load_presets()
+def create_demo(api_url, model, normalize, agent_type="vehicle"):
+    presets = load_presets(agent_type)
     default_label = next(iter(presets), None)
     default = presets.get(default_label, {}) if default_label else {}
-    example_history = default.get("history_text",
-                                 "\n".join(f"t={i*0.4:.1f}s: ({2.3+0.2*i:.2f}, {4.5+0.3*i:.2f})"
-                                           for i in range(OBS_LENGTH)))
+    is_veh = agent_type == "vehicle"
+    fallback_scene = "高速公路" if is_veh else "人行横道"
+    # example history: highway-speed forward motion for vehicles, slow walk for peds
+    step = 5.0 if is_veh else 0.3
+    example_history = default.get(
+        "history_text",
+        "\n".join(f"t={i*0.4:.1f}s: ({step*i:.2f}, {0.05*i:.2f})"
+                  for i in range(OBS_LENGTH)))
+    agent_cn = AGENT_LABELS[agent_type]
 
     with gr.Blocks(title="Qwen3-4B 轨迹预测系统") as demo:
-        gr.Markdown("# 🚶 基于 Qwen3-4B 的行人轨迹预测")
+        gr.Markdown(f"# 🚗 基于 Qwen3-4B 的{agent_cn}轨迹预测")
         gr.Markdown("### 微调 → 量化 → Orin 部署 全链路 Demo（含 CVM 基线对比）")
 
         with gr.Row():
             with gr.Column(scale=1):
                 preset_dd = gr.Dropdown(
                     choices=list(presets.keys()), value=default_label,
-                    label="预设样例（真实 ETH/UCY，含真值）"
-                    if presets else "预设样例（无：未找到测试集文件）")
+                    label=f"预设样例（含真值，agent={agent_cn}）"
+                    if presets else f"预设样例（无：未找到{agent_cn}测试集，可手动输入）")
                 scene_input = gr.Textbox(label="场景描述",
-                                         value=default.get("scene", "人行横道"))
+                                         value=default.get("scene", fallback_scene))
                 history_input = gr.Textbox(
-                    label="历史轨迹（每行：t=Xs: (x, y)，共8点）",
+                    label="历史轨迹（每行：t=Xs: (x, y)，共8点，单位米）",
                     lines=10, value=example_history)
                 predict_btn = gr.Button("预测", variant="primary", size="lg")
             with gr.Column(scale=1):
@@ -210,13 +223,13 @@ def create_demo(api_url, model, normalize):
 
         predict_btn.click(
             lambda scene, hist, label: predict(scene, hist, label, normalize,
-                                               api_url, model, presets),
+                                               api_url, model, presets, agent_type),
             inputs=[scene_input, history_input, preset_dd],
             outputs=[plot_output, text_output])
 
         gr.Markdown("---")
         gr.Markdown(f"**API**: `{api_url}`  |  **model**: `{model}`  "
-                    f"|  **normalize**: `{normalize}`")
+                    f"|  **agent**: `{agent_type}`  |  **normalize**: `{normalize}`")
         gr.Markdown("蓝=观测  红=LLM预测  绿=CVM基线  黑=真值")
 
     return demo
@@ -232,12 +245,15 @@ def main():
     parser.add_argument("--normalize", choices=["none", "translate", "translate_rotate"],
                         default=os.environ.get("TRAJ_NORMALIZE", "none"),
                         help="must match the deployed model's training normalization")
+    parser.add_argument("--agent_type", choices=["vehicle", "pedestrian"],
+                        default=os.environ.get("TRAJ_AGENT", "vehicle"),
+                        help="must match the deployed model")
     parser.add_argument("--server", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--share", action="store_true")
     args = parser.parse_args()
 
-    demo = create_demo(args.api_url, args.model, args.normalize)
+    demo = create_demo(args.api_url, args.model, args.normalize, args.agent_type)
     demo.launch(server_name=args.server, server_port=args.port, share=args.share,
                 theme=gr.themes.Soft())
 
