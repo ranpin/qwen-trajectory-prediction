@@ -156,7 +156,7 @@ qwen-trajectory-prediction/
 - [x] Orin 部署 + Demo（Gradio，agent 类型 + CVM 基线）
 - [x] CVM 基线（车辆 + 行人）
 - [x] 车辆模型重训 + 评估（合成：LLM ADE 1.58 vs CVM 7.41）
-- [ ] 行人归一化重训评估（待 Orin 部署）
+- [x] 行人归一化重训评估（结论：未超越 CVM，归一化无显著收益）
 - [ ] 真实车辆（NGSIM）评估（待手动下载数据）
 
 ## 许可证
