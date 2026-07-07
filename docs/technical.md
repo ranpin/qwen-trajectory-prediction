@@ -1,6 +1,7 @@
 # 技术文档
 
 本文档面向开发者，覆盖架构、数据管线、Prompt 规范、训练、量化、部署、评估方法学。
+系统为**车辆为主、兼容行人**（通过 agent 类型抽象，见 §3）。
 产品层面的目标与规划见 [PRD.md](PRD.md)；快速上手见 [README.md](../README.md)。
 
 ---
@@ -28,10 +29,21 @@
 
 ### 2.2 合成数据（`scripts/data_prep/synthetic_gen.py`）
 
-四种运动学模型：匀速直线、匀转弯、匀加速、走停(stop-and-go)，叠加高斯噪声。
-`--num_samples` 控制数量，`--normalize` 控制坐标归一化（见 2.4）。
+`--agent_type {vehicle,pedestrian,mixed}`（默认 vehicle；mixed 为车辆加权、保留行人，
+比例 `--vehicle_ratio`）。`--num_samples` 控制数量，`--normalize` 控制归一化（见 2.4）。
 
-### 2.3 真实数据 ETH/UCY（`download_datasets.py` + `preprocess.py`）
+- **车辆**：非完整约束运动学（航向 + 偏航率积分，不能横move），5 种机动：
+  高速巡航(近匀速)、变道(相反偏航脉冲，净一车道横移)、跟车(先减后加速)、路口转弯(60–100°)、
+  环岛(持续中等曲率)。速度 5–40 m/s。场景：高速公路/城市快速路/十字路口/环岛/匝道/主干道/停车场/隧道。
+- **行人**：匀速直线/匀转弯/匀加速/走停，0.5–2 m/s。
+
+### 2.3 真实车辆 NGSIM（`preprocess_ngsim.py`）与真实行人 ETH/UCY（`download_datasets.py` + `preprocess.py`）
+
+- **NGSIM**（真实车辆，US DOT）：CSV，10Hz，坐标单位**英尺→米**（×0.3048）；解析器兼容
+  Socrata 小写与经典大写列名，下采样 10Hz→0.4s，滑窗输出 agent=车辆 的 chat 样本。
+  **数据获取**：`data.transportation.gov` 对数据中心 IP 返回 HTTP 403，需从浏览器手动下载 CSV
+  后 `preprocess_ngsim.py --csv <file>`（或用 highD 注册 / rounD）。
+- **ETH/UCY**（行人）：制表符 `frame_id ped_id x y`，世界坐标（米），标注每 10 帧一次。
 
 - 格式：制表符分隔 `frame_id ped_id x y`，世界坐标（米），标注每 10 帧一次。
 - **帧步长探测**：`extract_samples` 会按每个行人的最小相邻帧差探测采样步长
@@ -58,15 +70,20 @@
 ## 3. Prompt 格式规范（`scripts/common/prompt_format.py`）
 
 训练数据、部署模型、Demo 必须使用**完全一致**的 user prompt。规范构造器
-`build_user_prompt()` 是唯一真源，`preprocess.py` / `synthetic_gen.py` / `demo/app.py` 全部 import 它。
+`build_user_prompt()` 是唯一真源，`preprocess.py` / `synthetic_gen.py` / `preprocess_ngsim.py` /
+`demo/app.py` 全部 import 它。
+
+**agent 类型**：`SYSTEM_PROMPTS{vehicle,pedestrian}` + `system_prompt(agent_type)`；
+`build_user_prompt(..., agent_label)` 以「车辆」/「行人」参数化文案（`AGENT_LABELS`）。
+一个模型可按 agent 标签同时服务两类；行人文案与旧版逐字一致（重生成行人数据字节级不变）。
 
 > 历史教训：早期 Demo 自行拼 `场景：X\n历史轨迹：Y`，与训练格式不一致，导致现场推理效果差于评估。
 
-user prompt 模板：
+user prompt 模板（`{agent}` = 车辆/行人）：
 
 ```
 场景：{scene}
-行人历史轨迹（过去3.2秒，每0.4秒采样）：
+{agent}历史轨迹（过去3.2秒，每0.4秒采样）：
 t=0.0s: (x, y)
 ... 8 行 ...
 平均速度：{v}m/s，主要方向：{dir}
@@ -136,18 +153,30 @@ set -a && . configs/deploy.env && set +a
 
 ### 7.3 CVM 基线（`scripts/evaluation/baselines.py`）
 
-匀速模型（观测段平均速度线性外推）是 ETH/UCY 单模态 ADE/FDE 上著名的强基线，是判断
+匀速模型（观测段平均速度线性外推）是单模态 ADE/FDE 上著名的强基线，是判断
 “LLM 是否比平凡外推更有价值”的关键对照。基线预测以**与模型完全相同的文本格式**输出，直接复用
-`evaluate.py` 打分。
+`evaluate.py` 打分。**⚠️ 高速车辆近似匀速，CVM 极强**——在合成 NGSIM 格式的直行数据上 CVM ADE 仅约
+0.16m；不喂高清地图/车道的纯文本 LLM 想在真实高速数据上超越 CVM 会**比行人更难**。
 
-### 7.4 当前结果（单次预测）
+### 7.4 当前结果（单次预测，ADE/FDE 单位米）
+
+车辆（主）：
+
+| 测试集 | LLM ADE | CVM ADE | LLM FDE | CVM FDE | LLM MR | CVM MR |
+|--------|---------|---------|---------|---------|--------|--------|
+| 合成车辆 (200) | 🔄 训练中 | 7.53 | 🔄 | 15.29 | 🔄 | 66.5% |
+| NGSIM 真实 | ⏳ 待数据 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+行人（兼容）：
 
 | 测试集 | LLM ADE | CVM ADE | LLM FDE | CVM FDE | LLM MR | CVM MR |
 |--------|---------|---------|---------|---------|--------|--------|
 | 合成 (190/200) | **0.82** | 1.53 | **1.37** | 2.70 | **12.1%** | 48% |
 | ETH/UCY (141/147) | 0.79 | **0.65** | 1.62 | **1.38** | 24.1% | **22.7%** |
+| ETH/UCY 归一化 | 🔄 待部署 | 0.65 | 🔄 | 1.37 | 🔄 | 22.7% |
 
-**结论**：真实数据上 CVM 反超 LLM，LLM 仅在自身合成分布上占优。归一化重训（第 8 节）用于验证能否翻盘。
+**结论**：真实行人数据上 CVM 反超 LLM，LLM 仅在自身合成分布上占优。车辆同理需警惕（见 7.3）。
+归一化重训（第 8 节）用于验证能否翻盘。🔄 进行中；⏳ 待 NGSIM 数据。
 
 ---
 

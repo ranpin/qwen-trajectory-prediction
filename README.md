@@ -1,18 +1,19 @@
-# 基于Qwen3-4B的轨迹预测系统
+# 基于 Qwen3-4B 的车辆轨迹预测系统
 
-> 微调 → 量化加速 → NVIDIA Orin端侧部署 全链路实现
+> 微调 → 量化加速 → NVIDIA Orin 端侧部署 全链路实现（车辆为主，兼容行人）
 
 ## 项目简介
 
-本项目基于Qwen3-4B大语言模型，实现一个完整的轨迹预测系统。通过将轨迹预测建模为文本生成任务，利用LLM的语义理解能力进行可解释的轨迹预测，并通过量化加速在NVIDIA Jetson Orin上实现实时推理。
+本项目基于 Qwen3-4B 大语言模型，实现一个完整的**车辆轨迹预测**系统。将轨迹预测建模为文本生成任务，利用 LLM 的语义理解能力进行可解释的轨迹预测，并通过量化加速在 NVIDIA Jetson Orin 上实现端侧推理。通过 **agent 类型**抽象，同一套流程/模型同时支持车辆（主）与行人。
 
 ## 核心特性
 
-- **LLM驱动**：基于Qwen3-4B微调，支持自然语言解释预测结果
-- **轻量微调**：使用QLoRA 4-bit，单张RTX 3070（8GB）即可完成训练
-- **量化加速**：AWQ/GGUF 4-bit量化，模型压缩至2GB
-- **端侧部署**：llama.cpp在Jetson Orin上实时推理
-- **交互式Demo**：Gradio可视化界面，支持在线演示
+- **车辆为主、多 agent 类型**：车辆/行人统一建模，prompt 内以 agent 标签区分
+- **LLM 驱动**：基于 Qwen3-4B 微调，支持自然语言解释预测结果
+- **轻量微调**：QLoRA 4-bit，单张 RTX 3070（8GB）即可完成训练
+- **量化加速**：AWQ/GGUF 4-bit 量化，模型压缩至约 2.4GB
+- **端侧部署**：llama.cpp 在 Jetson Orin 上推理
+- **交互式 Demo**：Gradio 可视化，含 CVM 匀速基线对比
 
 ## 技术栈
 
@@ -20,7 +21,7 @@
 |------|----------|
 | 基座模型 | Qwen3-4B |
 | 微调框架 | ms-swift (QLoRA 4-bit) |
-| 数据集 | ETH/UCY（真实评估）+ 合成数据（训练，50000 样本）|
+| 数据集 | 合成车辆（自行车模型，训练）+ NGSIM（真实车辆评估）+ ETH/UCY（行人）|
 | 量化 | AWQ 4-bit / GGUF Q4_K_M |
 | 推理引擎 | llama.cpp |
 | 部署目标 | NVIDIA Jetson AGX Orin 64GB |
@@ -47,28 +48,31 @@ pip install -r requirements.txt
 ### 数据准备
 
 ```bash
-python scripts/data_prep/download_datasets.py                       # 下载 ETH/UCY
-python scripts/data_prep/preprocess.py                             # 真实数据 -> chat 格式
-python scripts/data_prep/synthetic_gen.py --num_samples 50000      # 生成合成训练数据
-# 可加 --normalize translate_rotate 生成 agent-centric 归一化数据
+# 合成车辆数据（自行车模型；mixed=车辆为主、含行人）
+python scripts/data_prep/synthetic_gen.py --agent_type mixed --num_samples 50000 \
+    --normalize translate_rotate
+# 真实车辆（NGSIM，需手动下载 CSV 后解析；见 technical.md 数据获取）
+python scripts/data_prep/preprocess_ngsim.py --csv <ngsim.csv>
+# 行人（ETH/UCY，可选）
+python scripts/data_prep/download_datasets.py && python scripts/data_prep/preprocess.py
 ```
 
 ### 微调 → 量化 → 部署（在 pc-3070 上）
 
 ```bash
-bash scripts/training/train_synthetic.sh                           # QLoRA 训练 + 合并
-python scripts/training/quantize_gguf.py \
-    --model_path outputs/qwen3-4b-synthetic-lora-merged --quant_type Q4_K_M
+# 车辆一键重训（生成数据 → QLoRA → 合并 → GGUF）
+bash scripts/training/retrain_vehicle.sh translate_rotate
 set -a && . configs/deploy.env && set +a                          # 配置 Orin 端点
-bash scripts/deploy/deploy_to_orin.sh outputs/qwen3-4b-q4_k_m.gguf "$ORIN_HOST"
-# 归一化重训一键脚本：bash scripts/training/retrain_normalized.sh translate_rotate
+bash scripts/deploy/deploy_to_orin.sh outputs/qwen3-4b-vehicle-q4_k_m.gguf "$ORIN_HOST"
+# 行人归一化重训：bash scripts/training/retrain_normalized.sh translate_rotate
 ```
 
 ### 运行 Demo
 
 ```bash
 set -a && . configs/deploy.env && set +a
-python demo/app.py --normalize none      # --normalize 需与部署模型一致
+python demo/app.py --agent_type vehicle --normalize translate_rotate
+# --agent_type / --normalize 需与所部署模型一致
 ```
 
 ## 项目结构
@@ -110,17 +114,28 @@ qwen-trajectory-prediction/
 > best-of-K（minADE_K / minFDE_K）指标，不可直接与 best-of-20 榜单对比。
 > 误差均值附 95% 置信区间；评估脚本按 prompt 文本对齐预测与真值。
 
-**LLM vs CVM 匀速基线**（同口径）：
+**LLM vs CVM 匀速基线**（同口径，ADE/FDE 单位米）：
+
+车辆（主）：
+
+| 测试集 | LLM ADE | CVM ADE | LLM FDE | CVM FDE | LLM MR | CVM MR |
+|--------|---------|---------|---------|---------|--------|--------|
+| 合成车辆 (200, translate_rotate) | 🔄 训练中 | 7.53 | 🔄 训练中 | 15.29 | 🔄 | 66.5% |
+| NGSIM 真实车辆 | ⏳ 待数据 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+行人（兼容）：
 
 | 测试集 | LLM ADE | CVM ADE | LLM FDE | CVM FDE | LLM MR | CVM MR |
 |--------|---------|---------|---------|---------|--------|--------|
 | 合成 (190/200) | **0.82 ± 0.29** | 1.53 | **1.37 ± 0.39** | 2.70 | **12.1%** | 48% |
 | ETH/UCY (141/147) | 0.79 ± 0.17 | **0.65** | 1.62 ± 0.35 | **1.38** | 24.1% | **22.7%** |
-| ETH/UCY + 归一化重训 | 🔄 待测 | 0.65 | 🔄 待测 | 1.38 | 🔄 | 22.7% |
+| ETH/UCY + 归一化重训 | 🔄 待部署 | 0.65 | 🔄 | 1.38 | 🔄 | 22.7% |
 
-> ⚠️ **关键发现**：真实数据上匀速基线(CVM)反超 LLM；LLM 仅在自身合成分布上占优。
-> 归一化重训（A3）用于验证能否翻盘。方法学、复现命令见
-> [docs/technical.md](docs/technical.md) 第 7–9 节。指标为**单次预测**，非 best-of-K。
+> ⚠️ **关键发现（行人真实数据）**：匀速基线(CVM)反超 LLM，LLM 仅在自身合成分布上占优。
+> **车辆同理需警惕**：高速车辆近似匀速，CVM 极强（合成 NGSIM 格式上 CVM ADE 仅约 0.16m）——
+> 不喂高清地图的纯文本 LLM 想在真实高速数据上赢 CVM 更难，结果将如实汇报。
+> 指标为**单次预测**（非 best-of-K）；方法学与复现见 [docs/technical.md](docs/technical.md)。
+> 🔄 = 车辆/归一化重训进行中；⏳ = 待 NGSIM 数据（data.transportation.gov 对数据中心 IP 返回 403，需手动下载）。
 
 ## 文档
 
@@ -131,14 +146,15 @@ qwen-trajectory-prediction/
 
 - [x] 项目调研与规划
 - [x] GitHub仓库创建
-- [x] 数据准备与预处理（合成 + ETH/UCY）
-- [x] 模型微调（QLoRA）
-- [x] 量化加速（GGUF Q4_K_M）
-- [x] Orin部署（llama.cpp 服务）
-- [x] Demo开发（Gradio）
-- [x] 模型评估（合成 + 真实基准 + CVM 基线）
-- [x] 文档完善（PRD / README / technical 三拆）
-- [ ] 坐标归一化重训 A/B（待 pc-3070 执行）
+- [x] 数据管线（合成车辆/行人 + NGSIM 解析 + ETH/UCY）
+- [x] agent 类型抽象（车辆/行人统一 prompt）
+- [x] 合成车辆生成器（自行车模型：巡航/变道/跟车/转弯/环岛）
+- [x] 模型微调（QLoRA）+ 量化（GGUF Q4_K_M）
+- [x] Orin 部署 + Demo（Gradio，agent 类型 + CVM 基线）
+- [x] CVM 基线（车辆 + 行人）
+- [ ] 车辆模型重训 + 评估（进行中，pc-3070）
+- [ ] 行人归一化重训评估（待 Orin 部署）
+- [ ] 真实车辆（NGSIM）评估（待手动下载数据）
 
 ## 许可证
 
