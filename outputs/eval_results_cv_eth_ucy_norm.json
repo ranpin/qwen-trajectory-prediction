@@ -1,0 +1,22 @@
+{
+  "label": "CVM / ETH-UCY normalized",
+  "num_predictions": 150,
+  "num_evaluated": 150,
+  "unmatched": 0,
+  "parse_failures": 0,
+  "length_mismatches": 0,
+  "metric_note": "single-prediction ADE/FDE, not best-of-K minADE",
+  "meanADE": 0.6519689450749612,
+  "meanADE_ci95": 0.115585490699321,
+  "medianADE": 0.42654034079532976,
+  "meanFDE": 1.3743458218352116,
+  "meanFDE_ci95": 0.256151595936151,
+  "medianFDE": 0.8491217590247021,
+  "minADE": 0.0,
+  "maxADE": 3.6467203354237125,
+  "stdADE": 0.7222588619452736,
+  "minFDE": 0.0,
+  "maxFDE": 8.730280636955493,
+  "stdFDE": 1.6006140480692426,
+  "miss_rate_2m": 0.22666666666666666
+}
