@@ -9,6 +9,8 @@ Generates diverse trajectories using simple motion models:
 Each sample is output in ms-swift chat format.
 """
 
+import os
+import sys
 import json
 import math
 import argparse
@@ -16,6 +18,9 @@ import random
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
+from trajectory_norm import normalize_obs_pred, MODES  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "synthetic"
 PROC_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
@@ -163,7 +168,7 @@ def generate_analysis(obs, pred):
     return speed_desc, dir_desc
 
 
-def generate_one_sample():
+def generate_one_sample(normalize="none"):
     """Generate a single synthetic trajectory sample."""
     motion_type = random.choice(["linear", "curved", "accel", "stop_go"])
     speed = random.uniform(0.5, 2.0)
@@ -181,8 +186,13 @@ def generate_one_sample():
     else:
         obs, pred = generate_stop_and_go(OBS_LENGTH, PRED_LENGTH, speed, direction)
 
-    avg_speed = round(speed, 2)
-    dir_label = _direction_label(direction)
+    # Agent-centric normalization (identity when normalize="none"). Recompute
+    # speed/direction from the normalized frame so the prompt matches the coords.
+    obs, pred, _ = normalize_obs_pred(obs, pred, normalize)
+    avg_speed = round(float(np.mean(np.linalg.norm(np.diff(obs, axis=0), axis=1))
+                            / FRAME_INTERVAL), 2)
+    heading = math.atan2(obs[-1, 1] - obs[0, 1], obs[-1, 0] - obs[0, 0])
+    dir_label = _direction_label(heading)
 
     obs_text = format_coords(obs.tolist())
     pred_text = format_coords(pred.tolist(), time_offset=OBS_LENGTH * FRAME_INTERVAL)
@@ -220,7 +230,10 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=str, default=None,
                         help="Output file path (default: data/processed/synthetic_sft.jsonl)")
+    parser.add_argument("--normalize", choices=MODES, default="none",
+                        help="agent-centric coordinate normalization mode")
     args = parser.parse_args()
+    print(f"Normalization mode: {args.normalize}")
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -232,7 +245,7 @@ def main():
     print(f"Generating {args.num_samples} synthetic trajectory samples...")
     with open(out_path, "w", encoding="utf-8") as f:
         for i in range(args.num_samples):
-            sample = generate_one_sample()
+            sample = generate_one_sample(args.normalize)
             f.write(json.dumps(sample, ensure_ascii=False) + "\n")
             if (i + 1) % 10000 == 0:
                 print(f"  Generated {i + 1}/{args.num_samples}")

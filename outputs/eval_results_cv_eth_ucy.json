@@ -1,0 +1,22 @@
+{
+  "label": "CVM baseline / eth_ucy",
+  "num_predictions": 150,
+  "num_evaluated": 150,
+  "unmatched": 0,
+  "parse_failures": 0,
+  "length_mismatches": 0,
+  "metric_note": "single-prediction ADE/FDE, not best-of-K minADE",
+  "meanADE": 0.6530943482536388,
+  "meanADE_ci95": 0.11528870192148537,
+  "medianADE": 0.42827545354506064,
+  "meanFDE": 1.3775685109049407,
+  "meanFDE_ci95": 0.2555769296558392,
+  "medianFDE": 0.8520855667402341,
+  "minADE": 0.0,
+  "maxADE": 3.6474327410952,
+  "stdADE": 0.7204043184068003,
+  "minFDE": 0.0,
+  "maxFDE": 8.736704184073076,
+  "stdFDE": 1.5970231318469286,
+  "miss_rate_2m": 0.22666666666666666
+}

@@ -6,6 +6,8 @@ Frame rate: 2.5 fps (one frame every 0.4 seconds)
 Output format: JSON lines compatible with ms-swift SFT training.
 """
 
+import os
+import sys
 import json
 import argparse
 import random
@@ -13,6 +15,9 @@ from pathlib import Path
 from collections import defaultdict
 
 import numpy as np
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
+from trajectory_norm import normalize_obs_pred, MODES  # noqa: E402
 
 RAW_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "raw" / "eth_ucy"
 OUT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
@@ -52,10 +57,12 @@ def parse_eth_ucy(filepath: Path):
 
 def extract_samples(trajectories: dict, scene_name: str,
                     obs_len: int = OBS_LENGTH,
-                    pred_len: int = PRED_LENGTH):
+                    pred_len: int = PRED_LENGTH,
+                    normalize: str = "none"):
     """Extract observation/prediction pairs from trajectories.
 
     For each pedestrian, slide a window of obs_len + pred_len frames.
+    `normalize` applies an agent-centric transform (see trajectory_norm).
     """
     samples = []
     total_needed = obs_len + pred_len
@@ -82,6 +89,12 @@ def extract_samples(trajectories: dict, scene_name: str,
 
             obs_coords = coords[i:i + obs_len]
             pred_coords = coords[i + obs_len:i + total_needed]
+
+            # Apply the agent-centric transform (identity when normalize="none").
+            # Speed/direction below are computed from the normalized frame so the
+            # text prompt is self-consistent with the coordinates shown.
+            obs_coords, pred_coords, _ = normalize_obs_pred(
+                obs_coords, pred_coords, normalize)
 
             # Compute velocity and direction
             vel = np.diff(obs_coords, axis=0)
@@ -199,7 +212,10 @@ def main():
     parser.add_argument("--pred_length", type=int, default=PRED_LENGTH)
     parser.add_argument("--train_ratio", type=float, default=0.8)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--normalize", choices=MODES, default="none",
+                        help="agent-centric coordinate normalization mode")
     args = parser.parse_args()
+    print(f"Normalization mode: {args.normalize}")
 
     random.seed(args.seed)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -213,7 +229,8 @@ def main():
             scene = f.stem
             print(f"Processing train/{scene}...")
             trajectories = parse_eth_ucy(f)
-            samples = extract_samples(trajectories, scene, args.obs_length, args.pred_length)
+            samples = extract_samples(trajectories, scene, args.obs_length,
+                                      args.pred_length, args.normalize)
             print(f"  -> {len(samples)} samples from {len(trajectories)} pedestrians")
             all_samples.extend(samples)
 
@@ -225,7 +242,8 @@ def main():
             scene = f.stem
             print(f"Processing test/{scene}...")
             trajectories = parse_eth_ucy(f)
-            samples = extract_samples(trajectories, scene, args.obs_length, args.pred_length)
+            samples = extract_samples(trajectories, scene, args.obs_length,
+                                      args.pred_length, args.normalize)
             print(f"  -> {len(samples)} samples from {len(trajectories)} pedestrians")
             test_samples.extend(samples)
 

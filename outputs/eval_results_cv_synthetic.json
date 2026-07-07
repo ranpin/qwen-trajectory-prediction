@@ -1,0 +1,22 @@
+{
+  "label": "CVM baseline / synthetic",
+  "num_predictions": 200,
+  "num_evaluated": 200,
+  "unmatched": 0,
+  "parse_failures": 0,
+  "length_mismatches": 0,
+  "metric_note": "single-prediction ADE/FDE, not best-of-K minADE",
+  "meanADE": 1.5346594479187916,
+  "meanADE_ci95": 0.22062447642849584,
+  "medianADE": 1.0069297928820773,
+  "meanFDE": 2.7040478762252143,
+  "meanFDE_ci95": 0.39024448116950156,
+  "medianFDE": 1.9164731691611565,
+  "minADE": 0.02148654732353504,
+  "maxADE": 7.057738435046581,
+  "stdADE": 1.5918884018196024,
+  "minFDE": 0.014142135623730649,
+  "maxFDE": 13.151733726014985,
+  "stdFDE": 2.8157603975059238,
+  "miss_rate_2m": 0.48
+}
