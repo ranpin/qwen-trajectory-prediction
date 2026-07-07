@@ -21,7 +21,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 from trajectory_norm import normalize_obs_pred, MODES  # noqa: E402
-from prompt_format import build_user_prompt  # noqa: E402
+from prompt_format import build_user_prompt, system_prompt  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "synthetic"
 PROC_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
@@ -34,6 +34,11 @@ SYSTEM_PROMPT = (
 SCENE_TYPES = [
     "人行横道", "商业街", "校园广场", "公园步道",
     "地铁站出口", "住宅区道路", "商场走廊", "体育场馆",
+]
+
+VEHICLE_SCENE_TYPES = [
+    "高速公路", "城市快速路", "十字路口", "环岛",
+    "高速匝道", "主干道", "停车场", "隧道",
 ]
 
 OBS_LENGTH = 8
@@ -169,23 +174,105 @@ def generate_analysis(obs, pred):
     return speed_desc, dir_desc
 
 
-def generate_one_sample(normalize="none"):
-    """Generate a single synthetic trajectory sample."""
-    motion_type = random.choice(["linear", "curved", "accel", "stop_go"])
-    speed = random.uniform(0.5, 2.0)
-    direction = random.uniform(0, 2 * math.pi)
-    scene = random.choice(SCENE_TYPES)
+# --------------------------- vehicle kinematics ---------------------------
+# Vehicles are non-holonomic: they move along their heading and turn via a yaw
+# rate (unicycle/bicycle-style integration), unlike the free 2D pedestrian
+# models above. Speeds are far higher (urban ~5-15 m/s, highway ~20-40 m/s).
 
-    if motion_type == "linear":
-        obs, pred = generate_linear(OBS_LENGTH, PRED_LENGTH, speed, direction)
-    elif motion_type == "curved":
-        curvature = random.uniform(-1.5, 1.5)
-        obs, pred = generate_curved(OBS_LENGTH, PRED_LENGTH, speed, direction, curvature)
-    elif motion_type == "accel":
-        accel = random.uniform(-0.3, 0.3)
-        obs, pred = generate_accel(OBS_LENGTH, PRED_LENGTH, speed, direction, accel)
+VEHICLE_MANEUVERS = ["highway_cruise", "lane_change", "car_following",
+                     "turn", "roundabout"]
+LANE_WIDTH = 3.5  # meters
+
+
+def _veh_integrate(speeds, yaw_rates, heading0, start, noise_std=0.08):
+    """Integrate a non-holonomic path from per-step speeds and yaw rates."""
+    x, y = start
+    heading = heading0
+    pts = []
+    for k in range(len(speeds)):
+        pts.append((x + np.random.normal(0, noise_std),
+                    y + np.random.normal(0, noise_std)))
+        heading += yaw_rates[k] * FRAME_INTERVAL
+        x += speeds[k] * math.cos(heading) * FRAME_INTERVAL
+        y += speeds[k] * math.sin(heading) * FRAME_INTERVAL
+    return np.array(pts)
+
+
+def generate_vehicle(maneuver, n_obs, n_pred):
+    """Generate a vehicle trajectory (obs, pred) for a given maneuver."""
+    total = n_obs + n_pred
+    heading0 = random.uniform(0, 2 * math.pi)     # world heading (variety)
+    start = (random.uniform(-40, 40), random.uniform(-40, 40))
+
+    if maneuver == "highway_cruise":
+        v = random.uniform(22, 40)
+        speeds = [max(0.0, v + np.random.normal(0, 0.3)) for _ in range(total)]
+        yaws = [np.random.normal(0, 0.003) for _ in range(total)]
+    elif maneuver == "lane_change":
+        v = random.uniform(16, 33)
+        speeds = [max(0.0, v + np.random.normal(0, 0.3)) for _ in range(total)]
+        # two opposite yaw pulses -> net ~one lane lateral shift
+        s0 = random.randint(2, total - 8)
+        w = random.choice([3, 4])
+        amp = random.choice([-1, 1]) * (LANE_WIDTH / (v * (w * FRAME_INTERVAL) ** 2)) * 0.5
+        yaws = []
+        for k in range(total):
+            if s0 <= k < s0 + w:
+                yaws.append(amp)
+            elif s0 + w <= k < s0 + 2 * w:
+                yaws.append(-amp)
+            else:
+                yaws.append(np.random.normal(0, 0.003))
+    elif maneuver == "car_following":
+        v0 = random.uniform(8, 25)
+        # brake then re-accelerate (or vice versa)
+        a = random.uniform(0.5, 2.5) * random.choice([-1, 1])
+        speeds, v = [], v0
+        for k in range(total):
+            phase = a if k < total // 2 else -a
+            v = min(40.0, max(1.0, v + phase * FRAME_INTERVAL))
+            speeds.append(v)
+        yaws = [np.random.normal(0, 0.004) for _ in range(total)]
+    elif maneuver == "turn":
+        v = random.uniform(5, 12)
+        speeds = [max(0.0, v + np.random.normal(0, 0.2)) for _ in range(total)]
+        # ~60-100 degree turn spread over the trajectory
+        total_turn = math.radians(random.uniform(60, 100)) * random.choice([-1, 1])
+        rate = total_turn / (total * FRAME_INTERVAL)
+        yaws = [rate + np.random.normal(0, 0.01) for _ in range(total)]
+    else:  # roundabout
+        v = random.uniform(6, 11)
+        speeds = [max(0.0, v + np.random.normal(0, 0.2)) for _ in range(total)]
+        rate = random.choice([-1, 1]) * random.uniform(0.18, 0.35)
+        yaws = [rate + np.random.normal(0, 0.01) for _ in range(total)]
+
+    pts = _veh_integrate(speeds, yaws, heading0, start)
+    return pts[:n_obs], pts[n_obs:]
+
+
+def generate_one_sample(agent_type="vehicle", normalize="none"):
+    """Generate a single synthetic trajectory sample (vehicle or pedestrian)."""
+    if agent_type == "vehicle":
+        maneuver = random.choice(VEHICLE_MANEUVERS)
+        obs, pred = generate_vehicle(maneuver, OBS_LENGTH, PRED_LENGTH)
+        scene = random.choice(VEHICLE_SCENE_TYPES)
+        agent_label = "车辆"
     else:
-        obs, pred = generate_stop_and_go(OBS_LENGTH, PRED_LENGTH, speed, direction)
+        motion_type = random.choice(["linear", "curved", "accel", "stop_go"])
+        speed = random.uniform(0.5, 2.0)
+        direction = random.uniform(0, 2 * math.pi)
+        scene = random.choice(SCENE_TYPES)
+        if motion_type == "linear":
+            obs, pred = generate_linear(OBS_LENGTH, PRED_LENGTH, speed, direction)
+        elif motion_type == "curved":
+            curvature = random.uniform(-1.5, 1.5)
+            obs, pred = generate_curved(OBS_LENGTH, PRED_LENGTH, speed, direction, curvature)
+        elif motion_type == "accel":
+            accel = random.uniform(-0.3, 0.3)
+            obs, pred = generate_accel(OBS_LENGTH, PRED_LENGTH, speed, direction, accel)
+        else:
+            obs, pred = generate_stop_and_go(OBS_LENGTH, PRED_LENGTH, speed, direction)
+        agent_label = "行人"
 
     # Agent-centric normalization (identity when normalize="none"). Recompute
     # speed/direction from the normalized frame so the prompt matches the coords.
@@ -199,19 +286,21 @@ def generate_one_sample(normalize="none"):
     speed_desc, dir_desc = generate_analysis(obs, pred)
 
     # Canonical prompt builder (shared with the demo) prevents format drift.
-    user_msg = build_user_prompt(obs.tolist(), scene, avg_speed, dir_label)
+    user_msg = build_user_prompt(obs.tolist(), scene, avg_speed, dir_label,
+                                 agent_label=agent_label)
 
     assistant_msg = (
-        f"根据行人的运动趋势分析：\n"
+        f"根据{agent_label}的运动趋势分析：\n"
         f"- {speed_desc}\n"
         f"- {dir_desc}\n\n"
         f"预测轨迹：\n"
         f"{pred_text}"
     )
 
+    st = "vehicle" if agent_type == "vehicle" else "pedestrian"
     return {
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt(st)},
             {"role": "user", "content": user_msg},
             {"role": "assistant", "content": assistant_msg},
         ]
@@ -227,8 +316,13 @@ def main():
                         help="Output file path (default: data/processed/synthetic_sft.jsonl)")
     parser.add_argument("--normalize", choices=MODES, default="none",
                         help="agent-centric coordinate normalization mode")
+    parser.add_argument("--agent_type", choices=["vehicle", "pedestrian", "mixed"],
+                        default="vehicle",
+                        help="agent type to generate (mixed = vehicle-weighted blend)")
+    parser.add_argument("--vehicle_ratio", type=float, default=0.75,
+                        help="fraction of vehicle samples when agent_type=mixed")
     args = parser.parse_args()
-    print(f"Normalization mode: {args.normalize}")
+    print(f"Agent type: {args.agent_type} | Normalization: {args.normalize}")
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -240,7 +334,11 @@ def main():
     print(f"Generating {args.num_samples} synthetic trajectory samples...")
     with open(out_path, "w", encoding="utf-8") as f:
         for i in range(args.num_samples):
-            sample = generate_one_sample(args.normalize)
+            if args.agent_type == "mixed":
+                at = "vehicle" if random.random() < args.vehicle_ratio else "pedestrian"
+            else:
+                at = args.agent_type
+            sample = generate_one_sample(at, args.normalize)
             f.write(json.dumps(sample, ensure_ascii=False) + "\n")
             if (i + 1) % 10000 == 0:
                 print(f"  Generated {i + 1}/{args.num_samples}")

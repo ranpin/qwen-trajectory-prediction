@@ -12,10 +12,30 @@ FRAME_INTERVAL = 0.4   # seconds per frame
 OBS_LENGTH = 8         # observed frames (3.2s)
 PRED_LENGTH = 12       # predicted frames (4.8s)
 
-SYSTEM_PROMPT = (
-    "你是一个专业的行人轨迹预测专家。根据给定的行人历史轨迹和周围环境信息，"
-    "预测该行人未来的运动轨迹。你需要先分析运动趋势，再给出预测坐标。"
-)
+# Agent-type support. The system is vehicle-primary but keeps pedestrian as a
+# supported agent type; the label is threaded into every prompt so one model can
+# serve both. Strings are kept identical to the previous pedestrian wording so
+# regenerated pedestrian data stays byte-identical.
+AGENT_LABELS = {"vehicle": "车辆", "pedestrian": "行人"}
+
+SYSTEM_PROMPTS = {
+    "vehicle": (
+        "你是一个专业的车辆轨迹预测专家。根据给定的车辆历史轨迹和周围环境信息，"
+        "预测该车辆未来的运动轨迹。你需要先分析运动趋势，再给出预测坐标。"
+    ),
+    "pedestrian": (
+        "你是一个专业的行人轨迹预测专家。根据给定的行人历史轨迹和周围环境信息，"
+        "预测该行人未来的运动轨迹。你需要先分析运动趋势，再给出预测坐标。"
+    ),
+}
+
+# Backward-compatible alias (pedestrian wording).
+SYSTEM_PROMPT = SYSTEM_PROMPTS["pedestrian"]
+
+
+def system_prompt(agent_type="vehicle"):
+    """System prompt for the given agent type ('vehicle' | 'pedestrian')."""
+    return SYSTEM_PROMPTS[agent_type]
 
 
 def direction_label(angle_rad):
@@ -49,18 +69,20 @@ def format_coords(coords, time_offset=0.0, frame_interval=FRAME_INTERVAL):
 
 
 def build_user_prompt(obs_coords, scene, avg_speed, dir_label,
+                      agent_label="车辆",
                       obs_len=OBS_LENGTH, pred_len=PRED_LENGTH,
                       frame_interval=FRAME_INTERVAL):
     """Build the exact user message the model was trained on.
 
-    `scene` is the full scene string (callers add any suffix like
-    '（行人密集区域）' themselves). `obs_coords` is a list/array of (x, y).
+    `scene` is the full scene string (callers add any suffix themselves).
+    `agent_label` is the traffic-participant noun ('车辆' or '行人').
+    `obs_coords` is a list/array of (x, y).
     """
     obs_text = format_coords(obs_coords, frame_interval=frame_interval)
     return (
         f"场景：{scene}\n"
-        f"行人历史轨迹（过去{obs_len * frame_interval:.1f}秒，每{frame_interval}秒采样）：\n"
+        f"{agent_label}历史轨迹（过去{obs_len * frame_interval:.1f}秒，每{frame_interval}秒采样）：\n"
         f"{obs_text}\n"
         f"平均速度：{avg_speed}m/s，主要方向：{dir_label}\n\n"
-        f"请预测该行人未来{pred_len * frame_interval:.1f}秒的轨迹。"
+        f"请预测该{agent_label}未来{pred_len * frame_interval:.1f}秒的轨迹。"
     )

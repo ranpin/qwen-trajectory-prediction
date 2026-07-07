@@ -154,8 +154,10 @@ def sample_to_chat(sample: dict) -> dict:
     pred_text = format_coords(sample["pred"], time_offset=OBS_LENGTH * FRAME_INTERVAL)
 
     # Canonical prompt builder (shared with the demo) prevents format drift.
+    # ETH/UCY is a pedestrian dataset -> agent_label 行人.
     user_msg = build_user_prompt(sample["obs"], f"{sample['scene']}（行人密集区域）",
-                                 sample["avg_speed"], sample["direction"])
+                                 sample["avg_speed"], sample["direction"],
+                                 agent_label="行人")
 
     # Compute analysis based on trajectory
     obs = np.array(sample["obs"])
