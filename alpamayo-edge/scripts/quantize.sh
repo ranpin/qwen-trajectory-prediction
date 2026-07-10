@@ -1,21 +1,18 @@
 #!/bin/bash
-# M3 — Quantize Alpamayo-R1 with TensorRT-Edge-LLM (runs on the Orin, 64GB).
-# Orin runtime supports FP16 / INT8 / INT4 only (NOT FP8/FP4/NVFP4 — Blackwell).
-# Ref: NVIDIA/TensorRT-Edge-LLM docs (features/quantization.md, supported-models.md)
+# INT4/INT8 quantization track — TensorRT-Edge-LLM QUANTIZATION applies to
+# SUPPORTED LLM/VLM checkpoints, NOT Alpamayo (Alpamayo is FP16-only in v0.9.0).
+# Recommended target: nvidia/Cosmos-Reason2-8B (same Physical-AI family, VLM) or a
+# Qwen3-VL. Runs on an x86 host with an NVIDIA GPU. Ref: features/quantization.md
 set -e
+QMODEL="${QMODEL:-nvidia/Cosmos-Reason2-8B}"
+QFORMAT="${QFORMAT:-int4_awq}"        # Orin runtime: int4_awq | int8_sq (NO fp8/nvfp4)
+OUT="${OUT:-checkpoints/${QMODEL##*/}-${QFORMAT}}"
 
-MODEL="${MODEL:-nvidia/Alpamayo-R1-10B}"          # HF checkpoint (BF16)
-QFORMAT="${QFORMAT:-int4_awq}"                     # int4_awq | int8_sq
-OUT="${OUT:-checkpoints/alpamayo-r1-${QFORMAT}}"
-CALIB="${CALIB:-data/av_subset/calib.jsonl}"       # small calibration set
-
-# TODO(M0): pin exact CLI/flags from TensorRT-Edge-LLM Quick Start.
-# Documented tools: tensorrt-edgellm-quantize  /  tensorrt-edgellm-export
 tensorrt-edgellm-quantize llm \
-    --model "$MODEL" \
-    --qformat "$QFORMAT" \
-    --calib "$CALIB" \
-    --output "$OUT"
-    # visual encoder stays FP16 on Orin (do NOT use --visual_quantization fp8 here)
+    --model_dir "$QMODEL" \
+    --output_dir "$OUT" \
+    --qformat "$QFORMAT"
+    # VLM visual tower stays FP16 on Orin (fp8 visual needs Blackwell/Thor)
 
 echo "quantized checkpoint -> $OUT"
+echo "next: tensorrt-edgellm-export '$OUT' '$OUT/onnx' → scp to device → *_build → run"

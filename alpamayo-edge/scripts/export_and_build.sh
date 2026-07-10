@@ -1,20 +1,29 @@
 #!/bin/bash
-# M3/M4 — Export quantized checkpoint and build the edge engine ON the Orin.
-# TensorRT-Edge-LLM workflow: HF/quantized ckpt --(export)--> ONNX --(build)--> engine,
-# with engine build + inference running entirely on the edge device.
+# Alpamayo-R1 FP16 workflow (official TensorRT-Edge-LLM examples/vla.md).
+# NOTE: Alpamayo is FP16-ONLY in v0.9.0 — there is NO INT4/INT8 for the VLA yet.
+# Export runs on an x86 host w/ GPU; engines build on the edge device
+# (official example uses Jetson THOR; Orin FP16 plausible but unverified).
 set -e
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/tensorrt-edgellm-workspace}"
+MODEL_NAME="${MODEL_NAME:-Alpamayo-R1-10B}"
+KV="${KV:-4096}"
+DEVICE="${ORIN_HOST:-vision@30.245.40.99}"
+W="$WORKSPACE_DIR/$MODEL_NAME"
 
-CKPT="${CKPT:-checkpoints/alpamayo-r1-int4_awq}"
-ENGINE_DIR="${ENGINE_DIR:-engines/alpamayo-r1-int4}"
-PREC="${PREC:-int4}"                                # fp16 | int8 | int4 (Orin)
+echo "### Step 1 (x86 HOST): download + export to ONNX (FP16)"
+# hf auth login
+# hf download nvidia/${MODEL_NAME} --local-dir "$W"
+tensorrt-edgellm-export "$W" "$W/onnx" --max-kv-cache-capacity "$KV"   # -> onnx/{llm,visual,action}
 
-# TODO(M0): pin exact flags from Quick Start / checkpoint-export.md.
-tensorrt-edgellm-export \
-    --checkpoint "$CKPT" \
-    --output "$ENGINE_DIR" \
-    --precision "$PREC"
-    # For Orin Nano (low RAM) add: --externalize-weights int4_ffn
-    # Alpamayo action head (flow-matching diffusion) is exported via the
-    # tensorrt_edgellm/models/alpamayo module + cpp/action/alpamayo1ActionRunner.
+echo "### Step 2: transfer ONNX to edge device"
+scp -r "$W/onnx" "$DEVICE:~/tensorrt-edgellm-workspace/$MODEL_NAME/"
 
-echo "engine -> $ENGINE_DIR"
+cat <<REMOTE
+
+### Step 3 (RUN ON DEVICE, inside the TensorRT-Edge-LLM repo):
+W=~/tensorrt-edgellm-workspace/$MODEL_NAME
+./build/examples/llm/llm_build          --onnxDir \$W/onnx/llm    --engineDir \$W/engines/llm --maxInputLen 3424 --maxKVCacheCapacity $KV --maxBatchSize 6
+./build/examples/multimodal/visual_build --onnxDir \$W/onnx/visual --engineDir \$W/engines    --minImageTokens 160 --maxImageTokens 18432 --maxImageTokensPerImage 192
+./build/examples/multimodal/action_build --onnxDir \$W/onnx/action --engineDir \$W/engines    --maxBatchSize 6
+# then: scripts/run_action_inference.sh
+REMOTE

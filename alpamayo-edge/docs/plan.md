@@ -1,6 +1,11 @@
-# 项目计划（定稿）：Alpamayo-R1 边缘量化部署（全 Orin · 零预算 · 零训练）
+# 项目计划：Alpamayo-R1 边缘部署（零预算 · 零训练）
 
-## 决策锁定
+> ⚠️ **重大修正(见 [FINDINGS.md](FINDINGS.md))**:官方文档核实后,**Alpamayo 当前 FP16-only**
+> (无 INT4/INT8),且 VLA 示例跑在 **Thor**、导出需 **x86+GPU 主机**。因此:
+> ① **INT4/INT8 量化卖点改到受支持模型**(如 Cosmos-Reason2-8B);② **Alpamayo 走 FP16 边缘部署**;
+> ③ 需确认设备(Thor/Orin)。下方"决策锁定"为修正前版本,最终以 FINDINGS 的 **Opt1** 为准(待你确认)。
+
+## 决策锁定（部分已被上方修正取代）
 - **模型**：`nvidia/Alpamayo-R1-10B`（= Alpamayo 1）。**不用 1.5** —— TensorRT-Edge-LLM 的支持矩阵
   当前只有 `alpamayo_r1`（VLM 主干映射 `Qwen3VLForConditionalGeneration` + `AlpamayoAction` 头），
   1.5 尚未进边缘工具链。模型更强看 1.5，能落地看 R1，本项目选 R1。
