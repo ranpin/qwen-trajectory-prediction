@@ -1,75 +1,64 @@
-# 项目计划：Alpamayo-R1 边缘部署（零预算 · 零训练）
+# 项目计划（终版 · Opt1 混合）：AV VLA 边缘量化与部署
 
-> ⚠️ **重大修正(见 [FINDINGS.md](FINDINGS.md))**:官方文档核实后,**Alpamayo 当前 FP16-only**
-> (无 INT4/INT8),且 VLA 示例跑在 **Thor**、导出需 **x86+GPU 主机**。因此:
-> ① **INT4/INT8 量化卖点改到受支持模型**(如 Cosmos-Reason2-8B);② **Alpamayo 走 FP16 边缘部署**;
-> ③ 需确认设备(Thor/Orin)。下方"决策锁定"为修正前版本,最终以 FINDINGS 的 **Opt1** 为准(待你确认)。
+> 零预算(仅用免费云做一次性重活) · 零训练 · 常态全 Orin。
+> 背景与官方文档核实见 [FINDINGS.md](FINDINGS.md)。
 
-## 决策锁定（部分已被上方修正取代）
-- **模型**：`nvidia/Alpamayo-R1-10B`（= Alpamayo 1）。**不用 1.5** —— TensorRT-Edge-LLM 的支持矩阵
-  当前只有 `alpamayo_r1`（VLM 主干映射 `Qwen3VLForConditionalGeneration` + `AlpamayoAction` 头），
-  1.5 尚未进边缘工具链。模型更强看 1.5，能落地看 R1，本项目选 R1。
-- **量化/部署栈**：**NVIDIA TensorRT-Edge-LLM**（非 TensorRT-LLM）。它是面向 Physical AI 的边缘
-  C++ LLM/VLM/**VLA** 运行时，**内置量化**（`tensorrt-edgellm-quantize`，ModelOpt 系）+ 对 Alpamayo
-  一等公民支持（action 头 ONNX 导出 + `cpp/action/alpamayo1ActionRunner`）。
-- **精度**：Orin 运行时仅支持 **FP16 / INT8 / INT4**（FP8/FP4/NVFP4 需 Blackwell）。→ 用
-  **INT4 AWQ** 或 **INT8 SmoothQuant**。
-- **硬件**：全程 **Jetson Orin AGX 64GB**（量化时装得下 10B BF16 ~20GB）。**零云、零训练、零预算。**
-- **数据**：`nvidia/PhysicalAI-Autonomous-Vehicles`（门控、133TB）—— 只下几百段子集做真实评测。
-- **许可**：权重非商用（研究/简历 OK），推理代码 Apache-2.0。
+## 决策锁定（最终）
+- **两条模型轨道**:
+  - **量化轨道** → `nvidia/Cosmos-Reason2-8B`(TensorRT-Edge-LLM 受支持的 VLM,同属 Physical-AI 家族):
+    做 **INT4 AWQ / INT8 SmoothQuant**,产出真·精度-延迟-显存权衡曲线。
+  - **VLA 轨道** → `nvidia/Alpamayo-R1-10B`(**FP16-only**,当前无量化):边缘部署做**自动驾驶轨迹预测** + CVM 基线评测。
+- **栈**:NVIDIA **TensorRT-Edge-LLM** v0.9.0(内置量化 + Alpamayo action 头支持)。
+- **设备**:仅 **Jetson Orin AGX 64GB**(运行时支持 FP16/INT8/INT4;Alpamayo-FP16 在 Orin 未经官方验证,列为风险)。
+- **算力分工(关键)**:
+  | 步骤 | 跑在哪 | 原因 |
+  |---|---|---|
+  | 数据子集 / 评测 / CVM / 可视化 | **本地 3070 / CPU** | 轻量,已就绪 |
+  | **量化(8B)/ 导出(10B→ONNX)** | **免费云 Kaggle 2×T4=32GB**(一次性) | 8GB 3070 装不下 8B/10B |
+  | build engine / 推理 / benchmark | **Orin** | 边缘部署本体 |
+- **许可**:Alpamayo 权重非商用(研究/简历 OK);TensorRT-Edge-LLM Apache-2.0。
+- **数据**:`nvidia/PhysicalAI-Autonomous-Vehicles`(门控,只下几百段子集)。
 
 ## 里程碑
-| M | 目标 | 交付物 | 验收 | 机器 |
-|---|---|---|---|---|
-| **M0** 环境 | 装 TensorRT-Edge-LLM（Orin/JetPack），跑通 Quick Start，拉 Alpamayo-R1 权重；**pin 住 quantize/export 的确切 CLI 参数** | 环境可复现 + 单样本推理通 | `tensorrt-edgellm` 可用；R1 FP16 出 1 条轨迹 | Orin |
-| **M1** 数据+口径 | 申请 PhysicalAI-AV，`physical_ai_av` 下 200–500 段 → `eval` JSONL（obs/gt，6.4s/64pt/10Hz） | 子集 + `data/prepare_physicalai_av.py` 完成 | 抽样可视化肉眼合理 | 本地/3070 |
-| **M2** FP16 基线 | Orin 上 R1 FP16 推理，测 ADE/FDE/MR + 延迟；抽检推理痕迹 | 基线结果表（R1-FP16 vs CVM） | 全精度数值 + 延迟落地 | Orin |
-| **M3** 量化 | `tensorrt-edgellm-quantize` 出 INT8、INT4 检查点 → export → build engine | 掉点曲线（FP16/INT8/INT4：体积/显存/精度） | ≥2 精度量化+测出 | Orin |
-| **M4** 基准 | `benchmark.py` 测 延迟/吞吐/功耗(tegrastats)/显存，三精度对比 | Orin 基准表 | 端到端延迟测出 | Orin |
-| **M5** 报告 | 架构/方法/结果/权衡/诚实局限 + 图表 + 可选 demo viewer | repo + 报告 + 简历 bullet | 可展示 | 本地 |
+| M | 目标 | 跑在哪 | 交付/验收 |
+|---|---|---|---|
+| **M0** 环境 | Orin 装 TensorRT-Edge-LLM(JetPack 6.2+/7.2);免费云装量化/导出包;pin CLI | Orin + 云 | 两端可用;Quick Start 通 |
+| **M1** 数据+口径 | 申请 PhysicalAI-AV;下 200–500 段→eval JSONL(obs/gt,6.4s/64pt/10Hz);CVM 基线 | 本地 | 子集+CVM 数值 |
+| **M2a** 量化(Cosmos-Reason2-8B) | 云上 INT8/INT4 → export ONNX → scp → Orin build | 云→Orin | ≥2 精度引擎 |
+| **M2b** Alpamayo FP16 | 云上 export(onnx/llm+visual+action)→ scp → Orin build | 云→Orin | Orin 上出 1 条轨迹(验证 Orin 可跑) |
+| **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin | 两张结果表 |
+| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 |
+| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo |
 
-**关键路径**：M0（Orin 上 TensorRT-Edge-LLM 构建 + pin CLI）与 M1（数据审批）最可能拖期，可并行。
+**关键路径/风险点**:M2b(Alpamayo 能否在 Orin FP16 跑通)是最大不确定;跑不通则 VLA 轨道降级为"导出成功+Orin 运行受阻"如实记录,量化轨道(Cosmos)独立成立,项目仍完整。
 
-## 目录结构（本分支 `alpamayo-edge/`）
+## 并行编排
+- **可立刻并行**:①你 HF 申请 PhysicalAI-AV(异步审批);②我把 M1 数据/评测脚手架补成"合成占位可跑"(不等数据);③我整理 M0 的 Orin + 免费云安装命令清单。
+- **审批/环境就绪后汇合**:M2a、M2b 可**并行**(两条模型轨道互不依赖),各自 云导出→Orin build→评测。
+
+## 目录结构（`alpamayo-edge/`）
 ```
-alpamayo-edge/
-├── README.md
-├── docs/plan.md                 # 本文件
-├── configs/orin.env             # Orin 端点 / 模型 / 量化精度
-├── data/
-│   └── prepare_physicalai_av.py # PhysicalAI-AV → eval JSONL（M1 桩）
-├── eval/                        # ← 从父仓库迁移，已本地测通
-│   ├── metrics.py               # ADE/FDE/MR + 95%CI（迁移自 evaluate.py）
-│   ├── baselines.py             # CVM / last-step CV（迁移自 baselines.py）
-│   ├── evaluate.py              # 按 JSONL 打分（模型 or 基线）
-│   └── viz.py                   # BEV 可视化（迁移自 demo/app.py）
-├── scripts/
-│   ├── quantize.sh              # tensorrt-edgellm-quantize（INT4/INT8）
-│   ├── export_and_build.sh      # export + 边缘 build engine
-│   └── benchmark.py             # 延迟/吞吐/功耗（tegrastats）骨架
-├── checkpoints/ engines/ data/av_subset/ outputs/   # gitignore
+docs/{plan.md, FINDINGS.md}
+configs/orin.env
+eval/  metrics.py  baselines.py(CVM)  evaluate.py  viz.py(BEV)  action_to_traj.py(accel,κ→xy)   # 已本地测通
+scripts/ quantize.sh(Cosmos-Reason2 INT4/INT8)  export_and_build.sh(Alpamayo FP16)
+         run_action_inference.sh  benchmark.py
+data/ prepare_physicalai_av.py(M1)  [+ make_synthetic_av.py 占位, 待补]
+checkpoints/ engines/ data/av_subset/ outputs/   # gitignore
 ```
 
-## 复用清单（来自父仓库 qwen-trajectory-prediction）
-| 迁移项 | 来源 | 状态 |
-|---|---|---|
-| ADE/FDE/MR + 置信区间 | `scripts/evaluation/evaluate.py` | ✅ 已迁移为 `eval/metrics.py`（改为吃轨迹数组，本地测通） |
-| CVM 强基线 | `scripts/evaluation/baselines.py` | ✅ `eval/baselines.py`（数组版，测通） |
-| 评估驱动 + 报告 | `evaluate.py` | ✅ `eval/evaluate.py`（JSONL，支持 `--baseline cvm`，测通） |
-| BEV 可视化 + CJK 字体 | `demo/app.py` | ✅ `eval/viz.py`（obs/LLM/CVM/GT 四线，测通） |
-| Orin 部署/重启套路 | `scripts/deploy/deploy_to_orin.sh` | 🔁 思路复用，引擎换 TensorRT-Edge-LLM |
-| 方法学经验（带 CVM、诚实报负、断点续跑、env 配端点） | 全项目 | ✅ 继承 |
-| GGUF/`quantize_gguf.py` | — | ❌ 不适用（改用 tensorrt-edgellm-quantize） |
+## 复用清单（父仓库 → 已迁移并测通）
+ADE/FDE/MR+CI · CVM 基线 · 评估驱动 · BEV 可视化 —— 见 `eval/`。方法学经验(带 CVM 对照、诚实报负、
+断点续跑、env 配端点)继承。GGUF 那套不适用(改 tensorrt-edgellm-quantize)。
 
 ## 风险与缓解
-- **M0 Orin 构建摩擦**（aarch64/JetPack，"initial support"）→ 用官方预编译 wheel/容器;跑不通退回 PyTorch 推理 + 只测精度。
-- **Alpamayo action 头导出**→ 官方已有 `alpamayo` 模块 + C++ runner,按其示例走;仍失败则只量化/部署 VLM 主干(Cosmos-Reason)。
-- **数据审批延迟**→ 审批期先做 M0 + 用合成占位样本跑通 `eval/` 全链路。
-- **Orin 上 10B+视频难实时**→ 价值转为"延迟/功耗刻画",不强求实时。
-- **1.5 更强但没边缘支持**→ 作为"未来工作";若工具链更新支持 1.5 再切。
+- **M2b Alpamayo-on-Orin 未验证** → 先小样本验证;失败则 VLA 轨道只交"导出+分析",量化轨道保底。
+- **免费云配额/时长** → 导出/量化是一次性;分步 checkpoint,产物落盘即下载。
+- **Orin build 摩擦(initial support)** → 用官方预编译 wheel/容器;失败退 PyTorch 推理只测精度。
+- **数据审批延迟** → 合成占位样本先跑通全链路。
 
-## 简历表达（填入实测数）
-用 **NVIDIA TensorRT-Edge-LLM** 将 10B 自动驾驶 VLA(Alpamayo-R1,含 flow-matching 轨迹头)
-**INT4 量化并部署于 Jetson Orin**,显存 −X% / 端到端延迟 Y ms / ADE 掉点 <Z%,建立含 CVM 强基线的
-ADE/FDE/MissRate 评测(PhysicalAI-AV 真实子集)。技能:模型量化(INT4/INT8/ModelOpt)、边缘部署
-(Jetson Orin/TensorRT-Edge-LLM)、多模态 VLA、自动驾驶轨迹预测、精度-延迟-功耗权衡。
+## 简历表达（填实测数）
+用 **NVIDIA TensorRT-Edge-LLM** 在 **Jetson Orin** 端侧部署自动驾驶多模态栈:对 **Cosmos-Reason2-8B**
+做 **INT4/INT8** 量化(显存 −X% / 延迟 Y ms / 掉点 <Z%),并部署 **10B AV VLA(Alpamayo-R1,含
+flow-matching 轨迹头)** 做轨迹预测,建立含 **CVM 强基线**的 ADE/FDE/MissRate 评测(PhysicalAI-AV 真实子集)。
+技能:模型量化(INT4/INT8/ModelOpt)、边缘部署(Jetson Orin/TensorRT-Edge-LLM)、多模态 VLA、自动驾驶轨迹预测。
