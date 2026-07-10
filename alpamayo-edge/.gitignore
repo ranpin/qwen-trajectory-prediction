@@ -1,0 +1,11 @@
+# Large / generated artifacts — never commit
+data/av_subset/
+*.gguf
+*.onnx
+*.engine
+checkpoints/
+engines/
+outputs/
+!outputs/.gitkeep
+__pycache__/
+*.pyc
