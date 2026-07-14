@@ -3,9 +3,18 @@
 8GB 3070 装不下 8B/10B,这一步在免费云一次性完成,产物(ONNX,几 GB)下载后 scp 到 Orin。
 
 ## 平台选择
-- **ModelScope 魔搭(国内首选,直连)** → `modelscope_export_quant.sh`
-- 百度 AI Studio(免费 V100 32GB)→ 用 `modelscope_export_quant.sh` 同款(改 WORK 路径即可)
-- Colab(部分地区被封,慎用)/ Kaggle → `colab_export_quant.ipynb`
+- **Kaggle(当前采用,直连 GitHub/HF、免镜像)** → `kaggle_export_quant.ipynb`(交互跑)
+  或 `kaggle_run.sh`(给我 Kaggle API token 后可headless驱动)
+- ModelScope 魔搭(国内直连但 GitHub 需代理、HF 需镜像)→ `modelscope_export_quant.sh`
+- 百度 AI Studio(免费 V100 32GB)→ 用 `modelscope_export_quant.sh` 同款
+- Colab(多地区被封)→ `colab_export_quant.ipynb`
+
+## Kaggle 步骤(交互)
+1. New Notebook → 右侧 Settings:**Accelerator=GPU T4 x2**、**Internet=On**;
+   Add-ons→Secrets 新增 `HF_TOKEN`(你的 HF read token;先在 HF 网页同意 Alpamayo-R1/Cosmos-Reason2 许可)。
+2. 打开 `kaggle_export_quant.ipynb`(File→Import Notebook 或复制 cell),Run All。
+3. 右侧 Output 面板下载 `edge_artifacts.tgz`。
+> T4 单卡 16GB:Cosmos-8B 量化(offload)可行;Alpamayo-10B FP16 导出可能 OOM,脚本已排 Cosmos 在前,OOM 就先只交 Cosmos。
 
 ## ModelScope 步骤
 1. 开一个**带 GPU 的免费 Notebook**(挑显存最大的免费实例)。
