@@ -6,7 +6,7 @@
 ## 一句话结论
 
 **量化链路全线跑通**：`nvidia/Cosmos-Reason2-8B` 已产出 **INT4 (AWQ)** 与 **INT8 (SmoothQuant)** 两份边缘 ONNX 产物；INT4 在 Orin 上 **TensorRT 引擎构建 + 加载均成功**。
-唯一未通的是**推理运行时**——被 TensorRT-Edge-LLM 预编译插件在 **sm_87 (Orin)** 上的一个 FMHA kernel 覆盖缺口挡住（详见「已知限制」）。此问题与量化无关。
+唯一未通的是**推理运行时**——卡在 TensorRT-Edge-LLM 预编译 FMHA 插件的一次 **hashKey 精确匹配 miss**（`There must be one kernel...`）。经源码核对，**并非** sm_87 架构缺 kernel（sm_87 与 sm_80/89 等量、含 headDim128 causal 变体），而是运行时某字段取值落到了预编译表未覆盖的组合，疑与本模型是 Qwen3VL 多模态有关。详见「已知限制」，此问题与量化无关。
 
 ## 已验证跑通的链路
 
@@ -55,21 +55,30 @@ terminate called after throwing an instance of 'std::runtime_error'
   what():  There must be one kernel to implement the MHA
 ```
 
-**定位**：`cpp/kernels/contextAttentionKernels/contextFMHARunner.cpp:458`
+**定位**：`cpp/kernels/contextAttentionKernels/contextFMHARunner.cpp:457-458`
 ```cpp
+FMHAKernelHashKey hashKey{trtToFMHADataType(mDataType), mPaddedSequenceLen, mHeadSize,
+    mLaunchParams.force_unroll, mLaunchParams.force_fp32_acc, mLaunchParams.flash_attention,
+    attentionMaskTypeToInt(...), mLaunchParams.use_granular_tiling, attentionInputLayoutToInt(...)};
+FMHAKernelFuncInfo kernelInfo = fmhaKernelList->findKernelFunction(hashKey);
 check::check(kernelInfo.mSharedMemBytes != 0, "There must be one kernel to implement the MHA");
 ```
-运行时用 `{dataType, paddedSeqLen, headSize=128, ..., mask=CAUSAL, layout=SEPARATE_Q_K_V, tiling}` 组成的 hashKey 去查预编译 FMHA kernel 表，在 **sm_87** 上取到空 kernel（`mSharedMemBytes==0`）。
+TRTEdge 不在设备上现编 attention kernel，而是把一张**预编译 cubin 表**（`cubin/fmha_cubin.h` 的 `sMhaKernelMetaInfosV2[]`）按 9 字段 key 建成 `unordered_map`，运行时**精确匹配**，查不到即空 kernel（`mSharedMemBytes==0`）抛此错。
 
-**根因**：预编译 FMHA cubin（`cpp/kernels/contextAttentionKernels/cubin/*.cubin.cpp`）在 sm_87 上对该 headSize/mask/tiling **组合有覆盖缺口**。sm_87 存在 `..._S_q_k_v_128_sm87`（分离布局 headSize128），但运行时实际请求的具体组合未命中。与量化、与我们的产物无关，纯属 TRTEdge 该版本插件的 kernel 覆盖问题。
+**根因（已经源码核对，修正早前"sm_87 覆盖缺口"的说法）**：
+- ❌ **不是架构缺口**：sm_87 有 **9 个** cubin，与 sm_80/86/89/100/120 **完全等量**；headDim=128 分离布局 causal 变体明确存在——`fmha_cubin.h` 第 298 行 `..._128_causal_sm87_kernel_nl`（tile 64×32, `mTiled=false`）、第 301 行 `..._128_causal_sm87_kernel_nl_tiled`（tile 64×128, `mTiled=true`）。
+- ❌ **不是模型不被支持**：导出+建引擎均成功；`AttentionPlugin` 构建期能力检查（`canImplement`，只校验 headSize∈{64,72,80,128,256}）通过。
+- ✅ **实为一次 hashKey 精确匹配 miss**：LLM 解码器 prefill 走 `attentionPlugin.cpp:174` 写死的 `{SEPARATE_Q_K_V(=3), CAUSAL(=1)}`，headSize=128 又在 `contextFMHARunner.cpp:355` 强制 `use_granular_tiling=false`、`force_unroll=true`、`force_fp32_acc=true(默认)`。逐字段比对，这套 key **本应命中第 298 行**——说明运行时某字段的**实际取值**偏离了静态推断，落空。最可能与本模型是 **Qwen3VL 系多模态**有关（构建日志 `Detected 3 deepstack embedding inputs (Qwen3VL model)`）：表内 headDim=128 只覆盖 mask∈{padding=0,causal=1,sliding=2}、layout∈{packed=0,separate=3}，**无 custom_mask(3)、无 paged_kv(2)**，若运行时请求落到这些未覆盖取值即 miss。
 
-**已在两种量化上复现（坐实与量化无关）**：INT4 与 INT8 引擎**均构建成功**（build 阶段日志还打印 `AttentionPlugin: FMHA supported for headSize=128`），但 `llm_bench --mode prefill` 一进 attention warmup 就在**同一处**崩（`what(): There must be one kernel to implement the MHA`，core dump）。两版症状、堆栈完全一致 → 确为架构/运行时的 kernel 覆盖问题，而非某个量化路径的产物问题。
+**已在两种量化上复现（坐实与量化无关）**：INT4 与 INT8 引擎**均构建成功**，`llm_bench --mode prefill` 一进 attention warmup 就在**同一处**崩，两版症状/堆栈完全一致 → 与量化路径、与我们的产物无关。
+
+**锁定确切字段只差一步（属已暂缓的深挖）**：在 `contextFMHARunner.cpp:457` 前打印实时 hashKey 九值，与第 298 行 key `{FP16,0,128,unroll=1,fp32acc=1,flash=1,mask=1,tiled=0,layout=3}` 逐项比对即知缺哪个。需重编插件。
 
 **未来若要解**（择一，均有不确定性）：
-1. 插桩打印运行时确切 hashKey，比对 cubin 表，确认缺失的确切组合；
-2. 尝试改 `llm_build` 参数（`maxInputLen`/batch）或真实 `llm_inference` 路径，看能否落到已存在的 kernel；
-3. 用 NVIDIA 的 fmha_v2 kernel 生成器补编 sm_87 缺失变体后重编插件；
-4. 上游提 issue。
+1. 上述插桩打印实时 hashKey，确认偏离字段（mask 还是 layout）；
+2. 若确为 custom_mask/paged_kv：改走真实 `llm_inference` 路径或调 `llm_build` 参数，看能否落到 causal+separate 已存在的 kernel；
+3. 用 NVIDIA 的 fmha_v2 kernel 生成器补编缺失变体后重编插件；
+4. 上游提 issue（附实时 hashKey 与表项对比）。
 
 ## 复现命令（Orin）
 ```bash
