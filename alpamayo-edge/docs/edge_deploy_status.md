@@ -99,3 +99,17 @@ export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so
   --multimodalEngineDir /home/vision/engines/int4/visual \
   --inputFile /home/vision/cosmos_input.json --dumpOutput --maxGenerateLength 128
 ```
+
+## 下一步实验建议（按性价比排序）
+
+已跑通"链路 + 双量化延迟/吞吐/显存 + 功能连贯"。要让评测更完整、更有说服力，建议：
+
+1. **功耗测量（补齐 M4）** — 优先级最高、成本最低。decode/prefill 时后台跑 `tegrastats`（或读 `/sys/bus/i2c/.../power`），记 INT4/INT8 的 GPU+SOC 功耗(W) 与 **能效(tok/J)**。边缘部署这项最有说服力，且几分钟可得。
+2. **FP16 基线补第三个点** — 现在只有 INT4/INT8 两点。补一个未量化 FP16 引擎（需在 Kaggle 再导一次 base ONNX，或查 TRTEdge 能否直接 fp16 build），才能画出完整的"精度-延迟-显存"三点权衡曲线，量化收益才量化得出来。
+3. **量化掉点定量评测（补齐 M3）** — 现仅 2 条 prompt 的定性判断。建一个小评测集（数十条 AV/推理题），用 FP16 输出作参照，算 INT4/INT8 的一致性/perplexity/任务正确率，得"掉点 <Z%"的硬数字。
+4. **真·多模态路径** — Cosmos-Reason2 是 VLM，目前只测了纯文本。喂真实图像 + 场景问题，走视觉塔 + deepstack 路径（模型的本职：物理场景推理）。这也验证视觉塔引擎的端到端正确性。
+5. **吞吐/上下文扩展性 sweep** — prefill 扫 inputLen(128→1024) 与 batch(1→4，引擎 maxBatch=4)；decode 扫 pastKVLen(128→4096) 看延迟随上下文增长曲线。刻画真实负载下的表现。
+6. **运维收尾** — 把 `build_orin` 设为默认（替换旧 `build/` 或持久化 `EDGELLM_PLUGIN_PATH`），清掉旧的带 DIAG 插桩的 `build/`；可选：向上游报"在 Orin 本机不带 `-DEMBEDDED_TARGET` 构建会静默排除 sm_87 导致 FMHA 崩"的体验问题。
+7. **（大工程）VLA 轨道 M2b** — 导出 Alpamayo-R1-10B(FP16 + action 头) → Orin build → 出轨迹 → 接 `eval/` 的 ADE/FDE/MR vs CVM。这是原计划的第二条轨道，独立且工作量大。
+
+> 建议顺序：先 **1+2+3**（补全量化评测三件套，让"精度-延迟-功耗"权衡完整）→ 再 **4**（多模态本职能力）→ 视精力做 **5/6/7**。

@@ -20,17 +20,17 @@
 - **数据**:`nvidia/PhysicalAI-Autonomous-Vehicles`(门控,只下几百段子集)。
 
 ## 里程碑
-| M | 目标 | 跑在哪 | 交付/验收 |
-|---|---|---|---|
-| **M0** 环境 | Orin 装 TensorRT-Edge-LLM(JetPack 6.2+/7.2);免费云装量化/导出包;pin CLI | Orin + 云 | 两端可用;Quick Start 通 |
-| **M1** 数据+口径 | 申请 PhysicalAI-AV;下 200–500 段→eval JSONL(obs/gt,6.4s/64pt/10Hz);CVM 基线 | 本地 | 子集+CVM 数值 |
-| **M2a** 量化(Cosmos-Reason2-8B) | 云上 INT8/INT4 → export ONNX → scp → Orin build | 云→Orin | ≥2 精度引擎 |
-| **M2b** Alpamayo FP16 | 云上 export(onnx/llm+visual+action)→ scp → Orin build | 云→Orin | Orin 上出 1 条轨迹(验证 Orin 可跑) |
-| **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin | 两张结果表 |
-| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 |
-| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo |
+| M | 目标 | 跑在哪 | 交付/验收 | 状态 |
+|---|---|---|---|---|
+| **M0** 环境 | Orin 装 TensorRT-Edge-LLM(JetPack 6.2+/7.2);免费云装量化/导出包;pin CLI | Orin + 云 | 两端可用;Quick Start 通 | ✅ 完成 |
+| **M1** 数据+口径 | 申请 PhysicalAI-AV;下 200–500 段→eval JSONL(obs/gt,6.4s/64pt/10Hz);CVM 基线 | 本地 | 子集+CVM 数值 | ◻ 待数据审批（合成占位已通） |
+| **M2a** 量化(Cosmos-Reason2-8B) | 云上 INT8/INT4 → export ONNX → scp → Orin build → **推理跑通** | 云→Orin | ≥2 精度引擎 | ✅ 完成（INT4+INT8，Orin 真实出 token） |
+| **M2b** Alpamayo FP16 | 云上 export(onnx/llm+visual+action)→ scp → Orin build | 云→Orin | Orin 上出 1 条轨迹(验证 Orin 可跑) | ◻ 未启动 |
+| **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin | 两张结果表 | ◧ 部分（功能连贯已验；量化掉点定量曲线待做，需 FP16 基线） |
+| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ◧ 部分（INT4/INT8 延迟+吞吐+显存已测；功耗 tegrastats + FP16 点待补，见 edge_deploy_status.md「下一步实验建议」） |
+| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ◧ 部分（edge_deploy_status.md 已成主报告） |
 
-**关键路径/风险点**:M2b(Alpamayo 能否在 Orin FP16 跑通)是最大不确定;跑不通则 VLA 轨道降级为"导出成功+Orin 运行受阻"如实记录,量化轨道(Cosmos)独立成立,项目仍完整。
+**关键路径/风险点**:M2b(Alpamayo 能否在 Orin FP16 跑通)是最大不确定;跑不通则 VLA 轨道降级为"导出成功+Orin 运行受阻"如实记录,量化轨道(Cosmos)已**独立跑通并出指标**,项目已完整成立。
 
 ## 并行编排
 - **可立刻并行**:①你 HF 申请 PhysicalAI-AV(异步审批);②我把 M1 数据/评测脚手架补成"合成占位可跑"(不等数据);③我整理 M0 的 Orin + 免费云安装命令清单。
