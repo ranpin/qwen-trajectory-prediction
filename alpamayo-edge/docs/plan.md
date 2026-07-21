@@ -27,10 +27,25 @@
 | **M2a** 量化(Cosmos-Reason2-8B) | 云上 INT8/INT4 → export ONNX → scp → Orin build → **推理跑通** | 云→Orin | ≥2 精度引擎 | ✅ 完成（INT4+INT8，Orin 真实出 token） |
 | **M2b** Alpamayo FP16 | 云上 export(onnx/llm+visual+action)→ scp → Orin build | 云→Orin | Orin 上出 1 条轨迹(验证 Orin 可跑) | ◻ 未启动 |
 | **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin | 两张结果表 | ◧ 部分（功能连贯已验；量化掉点定量曲线待做，需 FP16 基线） |
-| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ◧ 部分（INT4/INT8 延迟+吞吐+显存已测；功耗 tegrastats + FP16 点待补，见 edge_deploy_status.md「下一步实验建议」） |
+| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ◧ 大部（INT4/INT8 延迟+吞吐+显存+**功耗/能效+sweep+多模态**已测；仅缺 FP16 点） |
 | **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ◧ 部分（edge_deploy_status.md 已成主报告） |
 
 **关键路径/风险点**:M2b(Alpamayo 能否在 Orin FP16 跑通)是最大不确定;跑不通则 VLA 轨道降级为"导出成功+Orin 运行受阻"如实记录,量化轨道(Cosmos)已**独立跑通并出指标**,项目已完整成立。
+
+## 目标对照（初始目标 vs 实际达成，2026-07-21）
+
+> 初始目标：用 TensorRT-Edge-LLM 把**自动驾驶 VLA** 量化部署到 Orin，做**精度-延迟-功耗**权衡评测（含 CVM 强基线）；原设想量化 Alpamayo-R1-10B 本身。
+
+| 维度 | 状态 | 差异说明 |
+|---|---|---|
+| 量化 + 边缘部署（工程主线） | ✅ **超额** | INT4/INT8 双量化 Orin 端到端跑通，额外啃下 FMHA 崩溃根因 |
+| 延迟/吞吐/显存/功耗/能效基准 | ✅ **超额** | 原只要基准表，实际含能效 tok/J、上下文 sweep、多模态 |
+| 精度-延迟-功耗**权衡** | ◧ 部分 | 延迟/功耗/显存三轴齐；**精度轴缺 FP16 基线**，只有 INT4-vs-INT8 相对对比，无"掉点<X%"绝对数字 |
+| 量化载体 | ⚠️ **改标的** | 原想量化 Alpamayo，但它**只支持 FP16 不能量化**（[FINDINGS.md](FINDINGS.md) F1，硬约束）→ 量化落在受支持的 Cosmos-Reason2-8B |
+| **AV 轨迹预测（领域本职）** | ❌ **未达成** | 用模型出 6.4s/64 路点、算 ADE/FDE/MR vs CVM——完全没做，整体压在暂缓的 VLA 轨道(M2b)里 |
+| CVM 强基线 | ◧ 仅基线侧 | CVM 在合成数据跑通，但无真实模型轨迹与之对比；真实数据(PhysicalAI-AV)待审批 |
+
+**一句话**：**工程/系统目标（量化→边缘部署→性能功耗评测）已扎实达成甚至超额**；**领域/AV 目标（真实轨迹预测 + 真数据 vs CVM）基本未触及**，取决于是否启动 VLA 轨道。若定位为"展示边缘量化部署能力"——已完整有深度；若定位为"能预测轨迹的 AV 边缘系统"——还差 VLA 这半壁。
 
 ## 并行编排
 - **可立刻并行**:①你 HF 申请 PhysicalAI-AV(异步审批);②我把 M1 数据/评测脚手架补成"合成占位可跑"(不等数据);③我整理 M0 的 Orin + 免费云安装命令清单。
