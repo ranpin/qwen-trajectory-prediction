@@ -26,8 +26,9 @@ python scripts/benchmark.py --samples data/av_subset/test.jsonl --power -o outpu
 
 ## 现状
 - ✅ 评测/CVM/可视化(`eval/`)已从父仓库迁移并**本地测通**(可用合成样本跑)。
-- ✅ **量化链路全线跑通**:`nvidia/Cosmos-Reason2-8B` 已产出 **INT4(AWQ)** + **INT8(SmoothQuant)** 边缘 ONNX;INT4 在 Orin 上 **TensorRT 引擎构建+加载成功**。详见 [docs/edge_deploy_status.md](docs/edge_deploy_status.md)。
-- ⚠️ **推理运行时受阻**:TRTEdge 预编译插件在 **sm_87(Orin)** 上有 FMHA kernel 覆盖缺口(`There must be one kernel to implement the MHA`),与量化无关,已记录为 known-issue。
+- ✅ **端到端跑通,Orin 上真实出 token**:`nvidia/Cosmos-Reason2-8B` 的 **INT4(AWQ)** + **INT8(SmoothQuant)** 两版均在 Jetson Orin(sm_87)完成 引擎构建→加载→prefill→decode→连贯文本生成。详见 [docs/edge_deploy_status.md](docs/edge_deploy_status.md)。
+- 📊 **性能对照**:INT4 decode 30.9 tok/s(交互式首选,显存 4.6GB);INT8 prefill 3252 tok/s(吞吐首选)。INT4 decode 快 1.57×、INT8 prefill 快 1.9×。
+- 🔧 **FMHA 崩溃已修复**:根因是当初 Orin 构建 TRTEdge 漏传 `-DEMBEDDED_TARGET=jetson-orin`,CMake 默认按 sm_80;86;89 编译并 `-DEXCLUDE_SM_87` 排除了 sm_87 的 FMHA kernel;按官方 Orin 配方重编即通。与量化、模型均无关。
 - 📝 **模型选型说明**:实际落地用 **Cosmos-Reason2-8B**(TRTEdge 直接支持、可 T4 上量化);原计划的 **Alpamayo-R1-10B** 因 FP16-only + 15GB 卡上易 OOM 暂缓。
 - 🔜 M1 数据 / M4 基准 —— 见 [docs/plan.md](docs/plan.md)。
 
