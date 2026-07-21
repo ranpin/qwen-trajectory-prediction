@@ -30,7 +30,7 @@ sweep/多模态全套指标。详见 **[docs/edge_deploy_status.md](docs/edge_de
 
 ```bash
 cd /home/vision/TensorRT-Edge-LLM
-export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so   # 指向带 sm_87 的插件
+# 本机已把 build 软链到 build_orin 并在 ~/.bashrc 持久化 EDGELLM_PLUGIN_PATH，默认即正确插件；换环境时才需手动 export
 # 性能
 ./build_orin/examples/llm/llm_bench --engineDir engines/int4/llm --mode prefill --inputLen 512 --iterations 5  --warmup 2
 ./build_orin/examples/llm/llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iterations 20 --warmup 3

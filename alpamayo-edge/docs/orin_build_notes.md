@@ -28,9 +28,14 @@ make -j12   # 全量 CUDA 重编，Orin 上约 15-25 分钟
 
 ## 建引擎 + 运行（复现命令）
 
+> **插件路径机制**：TRTEdge 从 env `EDGELLM_PLUGIN_PATH` 加载插件，未设时默认相对路径
+> `build/libNvInfer_edgellm_plugin.so`（`LD_LIBRARY_PATH` 无效）。本 Orin 已做运维收尾——
+> 删掉旧的坏 `build/`（sm_80;86;89 + 调试插桩）、`build -> build_orin` 软链、并在 `~/.bashrc`
+> 持久化绝对 `EDGELLM_PLUGIN_PATH`。故现在**默认即正确插件，export 可省**；换机器/新克隆仍需按下面显式指定。
+
 ```bash
 cd /home/vision/TensorRT-Edge-LLM
-# ⚠️ 插件路径由 env EDGELLM_PLUGIN_PATH 决定，默认写死旧 build/——必须显式指向 build_orin
+# 本机已默认正确（软链+bashrc）；换环境时显式指定：
 export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so
 
 # 建引擎（~90s；两量化可共享同一份 fp16 视觉塔引擎）

@@ -82,6 +82,6 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 | 2 | FP16 基线（补精度-延迟-功耗第三点） | ⏸ 暂缓——需再跑 Kaggle 导出，绑定凭据轮换 |
 | 3 | 量化掉点定量评测（vs FP16 基线） | ⏸ 暂缓——依赖 #2 |
 | 7 | VLA 轨道 M2b（Alpamayo-R1-10B FP16 轨迹 + CVM） | ⏸ 暂缓——大工程，见 [plan.md](plan.md) |
-| 6 | 运维收尾（build_orin 设默认 / 上游报 issue） | ⏸ 暂缓 |
+| 6 | 运维收尾（build_orin 设默认 / 清旧 build） | ✅ 完成——删旧坏 build、`build→build_orin` 软链、`~/.bashrc` 持久化 EDGELLM_PLUGIN_PATH，默认即正确插件（上游报 issue 仍暂缓） |
 
 > 暂缓项均为用户决策的择期再启，非遗漏。#2/#3 是解锁"精度掉点硬数字"的关键，前提是先轮换 Kaggle/HF 凭据。
