@@ -62,7 +62,47 @@ Kaggle(T4x2) 量化+导出 ONNX → 打包 tgz → 下载/校验 → scp 到 Ori
 | 引擎载入显存 | ~4622 MiB | ~7864 MiB | Orin 统一内存 29GB；INT8 逼近上限 |
 | 真实生成 | ✅ 连贯正确 | ✅ 连贯正确 | 湿路刹车/行人处置两题，两版均合理，含自然 EOS 终止 |
 
-**结论**：交互式部署（低延迟、单流）选 **INT4**（decode 吞吐高 57%、显存省 42%）；长上下文/批量吞吐场景 INT8 prefill 更优。功能上两版输出质量均可用，无明显退化。
+### 功耗与能效（tegrastats，MAXN 模式，GPU-active 采样均值）
+
+三条电源轨：`VDD_GPU_SOC`(GPU+SOC 主算力) + `VDD_CPU_CV`(CPU) + `VIN_SYS_5V0`(5V 外设) = 整机模块功耗。
+
+| 场景 | INT4 (AWQ) | INT8 (SmoothQuant) | 能效赢家 |
+|---|---|---|---|
+| **Prefill** GPU_SOC / 整机 | 48.0 W / 61.8 W | 39.5 W / 52.1 W | — |
+| Prefill 能效 | 27.5 tok/J | **62.8 tok/J** | **INT8 快 2.3×**（原生 int8 核，功耗更低+吞吐更高） |
+| **Decode** GPU_SOC / 整机 | 26.3 W / 39.6 W | 25.5 W / 40.6 W | — |
+| Decode 能效 | **0.82 tok/J** | 0.50 tok/J | **INT4 高 1.64×**（访存密集，权重小=搬运能耗低） |
+| 峰值整机功耗 | prefill 67.3 W / decode 49.4 W | prefill 61.7 W / decode 46.6 W | — |
+
+**结论（含能效）**：
+- **交互式 / 单流低延迟 / 省电续航** → **INT4**：decode 吞吐高 57%、能效高 64%、显存省 42%。
+- **批量 / 长上下文 / 高吞吐** → **INT8**：prefill 快 1.9×、能效高 2.3×、功耗还更低。
+- 一句话：**decode 看 INT4，prefill 看 INT8**——两者在不同阶段各自既更快又更省电。功能上两版输出质量均可用，无明显退化。
+
+### 多模态（图像）路径验证 ✅
+
+喂 `examples/multimodal/pics/woman_and_dog.jpeg` + 提问，走**视觉塔 + deepstack 融合 + INT4 LLM** 全路径（`Processing vision inputs` / `Vision runner successfully initialized`）。模型准确描述了海滩场景（女子格子衫、狗戴彩色胸背带、海浪、日落暖光），与官方参照描述吻合 → VLM 本职能力在 Orin 上端到端正确。VLM 路径 CLI 额外强制 `--outputFile`。
+
+### 吞吐 / 上下文扩展性 sweep（INT4，MAXN）
+
+| Prefill inputLen (batch1) | 128 | 256 | 512 | 1024 |
+|---|---|---|---|---|
+| tok/s | 1485 | 1631 | 1701 | 1720 |
+
+> 长输入吞吐更高（利用率摊薄），1024 趋稳。
+
+| Prefill batch (inputLen512) | 1 | 2 | 4 |
+|---|---|---|---|
+| per-seq tok/s | 1699 | 873 | 422 |
+| 聚合 tok/s | 1699 | 1746 | 1686 |
+
+> **prefill 在 batch=1 已算力饱和**，批处理聚合吞吐恒定 ~1700，无增益（Orin GPU 打满）。
+
+| Decode pastKVLen (batch1) | 128 | 512 | 1024 | 2048 | 4000 |
+|---|---|---|---|---|---|
+| tok/s | 32.1 | 31.8 | 31.3 | 30.5 | 29.2 |
+
+> 上下文从 128 涨到 4000（31×），decode 仅掉 9%——由权重搬运主导，注意力占比小，长上下文扩展性好。
 
 ## FMHA 根因与修复（已解决）
 
