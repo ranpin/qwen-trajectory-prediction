@@ -17,6 +17,7 @@ sweep/多模态全套指标。详见 **[docs/edge_deploy_status.md](docs/edge_de
 
 | 文档 | 内容 |
 |---|---|
+| [docs/M5_report.md](docs/M5_report.md) | **一页总结（可展示）**：做了什么、核心图表、能用来干什么、诚实边界、简历 bullet |
 | [docs/edge_deploy_status.md](docs/edge_deploy_status.md) | **结果报告**：链路、产物体积、性能/功耗/sweep/多模态全套指标、选型结论、next-steps 处置 |
 | [docs/orin_build_notes.md](docs/orin_build_notes.md) | **工程日志**：正确 Orin 构建配方、复现命令、全部踩坑、FMHA 崩溃根因深挖 |
 | [docs/plan.md](docs/plan.md) | 项目计划、里程碑（M0–M5 状态）、目录结构、风险 |

@@ -28,7 +28,7 @@
 | **M2b** Alpamayo FP16 | 云上 export(onnx/llm+visual+action)→ scp → Orin build | 云→Orin | Orin 上出 1 条轨迹(验证 Orin 可跑) | ◻ 未启动 |
 | **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin | 两张结果表 | ◧ 部分（功能连贯已验；量化掉点定量曲线待做，需 FP16 基线） |
 | **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ◧ 大部（INT4/INT8 延迟+吞吐+显存+**功耗/能效+sweep+多模态**已测；仅缺 FP16 点） |
-| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ◧ 部分（edge_deploy_status.md 已成主报告） |
+| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ✅ 大部（[M5_report.md](M5_report.md) 一页总结 + 4 张图表 + 简历 bullet；仅缺 FP16/AV 轨道数据） |
 
 **关键路径/风险点**:M2b(Alpamayo 能否在 Orin FP16 跑通)是最大不确定;跑不通则 VLA 轨道降级为"导出成功+Orin 运行受阻"如实记录,量化轨道(Cosmos)已**独立跑通并出指标**,项目已完整成立。
 
