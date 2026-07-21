@@ -2,6 +2,10 @@
 
 8GB 3070 装不下 8B/10B,这一步在免费云一次性完成,产物(ONNX,几 GB)下载后 scp 到 Orin。
 
+> ✅ **实际采用并跑通的脚本**：[`kaggle_cosmos_only.py`](kaggle_cosmos_only.py)（Kaggle 2×T4，headless，Cosmos-Reason2-8B
+> INT4/INT8，含对 TRTEdge `quantize.py` 的三处补丁）。用 `kaggle kernels push` 提交即后台跑，产出 `edge_artifacts_*.tgz`。
+> 下面的 `kaggle_export_quant.*` / `modelscope_*` / `colab_*` 是**早期含 Alpamayo 的多平台备选**，Alpamayo 量化不被支持后收敛到 Cosmos-only（见 [../docs/FINDINGS.md](../docs/FINDINGS.md)）。HF token 走**环境变量**，勿硬编码。
+
 ## 平台选择
 - **Kaggle(当前采用,直连 GitHub/HF、免镜像)** → `kaggle_export_quant.ipynb`(交互跑)
   或 `kaggle_run.sh`(给我 Kaggle API token 后可headless驱动)

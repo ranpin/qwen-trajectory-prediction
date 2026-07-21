@@ -37,11 +37,17 @@ git clone https://github.com/NVIDIA/TensorRT-Edge-LLM.git
 cd TensorRT-Edge-LLM && mkdir build && cd build
 cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
+  -DTRT_PACKAGE_DIR=/usr \
   -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64_linux_toolchain.cmake \
+  -DEMBEDDED_TARGET=jetson-orin \       # ⚠️ 必须！否则默认 arch=80;86;89、-DEXCLUDE_SM_87 排除 sm_87 FMHA kernel → 推理必崩
   -DCUDA_CTK_VERSION=12.6                # 依你的 JetPack 改 12.6 或 13.2
 cmake --build . -j
 # 产物:build/examples/llm/llm_build, build/examples/multimodal/{visual_build,action_build,action_inference}
 ```
+> ⚠️ **务必带 `-DEMBEDDED_TARGET=jetson-orin`**（本项目最大的坑）。漏掉它 CMake 会走默认分支、静默排除
+> sm_87 的 FMHA kernel，引擎能建成但推理一进 attention 就 `There must be one kernel to implement the MHA` 崩。
+> 配置期确认日志 `FMHA Kernels: Excluding SM architectures: ...` **只排除非 87 的架构**。完整根因见
+> [orin_build_notes.md](orin_build_notes.md)。
 
 ## 自检清单
 - [ ] 主机:`tensorrt-edgellm-export --help` / `--quantize --help` 正常

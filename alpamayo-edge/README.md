@@ -1,39 +1,46 @@
-# Alpamayo-Edge:自动驾驶 VLA 的边缘量化部署
+# Alpamayo-Edge：自动驾驶多模态模型的边缘量化部署
 
-> 用 **NVIDIA TensorRT-Edge-LLM** 把 10B 自动驾驶 VLA **Alpamayo-R1** INT4/INT8 量化并部署到
-> **Jetson Orin**,做精度-延迟-功耗权衡评测(含 CVM 强基线)。**零预算 · 零训练 · 全 Orin。**
+> 用 **NVIDIA TensorRT-Edge-LLM** 把自动驾驶多模态大模型量化并部署到 **Jetson Orin**，
+> 做**精度-延迟-显存-功耗**权衡评测（含 CVM 强基线）。**零预算 · 零训练 · 全 Orin。**
 
-## 是什么 / 为什么
-- **模型**:`nvidia/Alpamayo-R1-10B` —— VLA(Cosmos-Reason 主干 + flow-matching 轨迹头),
-  输出 6.4s / 64 路点 / 10Hz 轨迹 + 因果链推理。选 R1 因为它是 TensorRT-Edge-LLM 当前支持的版本。
-- **栈**:TensorRT-Edge-LLM(NVIDIA 官方边缘 LLM/VLM/VLA 运行时,内置量化)。
-- **数据**:NVIDIA PhysicalAI-Autonomous-Vehicles(真实车辆,门控;只用小子集评测)。
+## 现状（一句话）
 
-## 快速开始(流程概览)
+**Cosmos-Reason2-8B 量化轨道已在 Orin 端到端跑通**：INT4(AWQ) + INT8(SmoothQuant) 两版完成
+引擎构建→加载→prefill→decode→真实文本/图像生成，并出齐延迟/吞吐/显存/功耗/能效/上下文
+sweep/多模态全套指标。详见 **[docs/edge_deploy_status.md](docs/edge_deploy_status.md)**。
+
+- 📊 **选型结论**：decode 看 **INT4**（30.9 tok/s、能效高 64%、显存省 42%）；prefill 看 **INT8**（3252 tok/s、能效高 2.3×）。
+- 🔧 **最大的坑已修**：Orin 构建漏传 `-DEMBEDDED_TARGET=jetson-orin` 会静默排除 sm_87 的 FMHA kernel、推理必崩——根因与修复见 [docs/orin_build_notes.md](docs/orin_build_notes.md)。
+- 📝 **模型选型**：量化落在 **Cosmos-Reason2-8B**（TRTEdge 直接支持、可 T4 量化）；原计划 **Alpamayo-R1-10B** 因 FP16-only（不支持量化）+ 大模型 OOM 风险，作为 VLA 轨道**暂缓**（见 [docs/FINDINGS.md](docs/FINDINGS.md)）。
+
+## 文档导航
+
+| 文档 | 内容 |
+|---|---|
+| [docs/edge_deploy_status.md](docs/edge_deploy_status.md) | **结果报告**：链路、产物体积、性能/功耗/sweep/多模态全套指标、选型结论、next-steps 处置 |
+| [docs/orin_build_notes.md](docs/orin_build_notes.md) | **工程日志**：正确 Orin 构建配方、复现命令、全部踩坑、FMHA 崩溃根因深挖 |
+| [docs/plan.md](docs/plan.md) | 项目计划、里程碑（M0–M5 状态）、目录结构、风险 |
+| [docs/FINDINGS.md](docs/FINDINGS.md) | 选型背景（Alpamayo 只支持 FP16 等三条硬事实，已定案） |
+| [docs/M0_setup.md](docs/M0_setup.md) | 两端环境搭建命令（导出主机 + Orin） |
+| [cloud/README.md](cloud/README.md) | 免费云（Kaggle）一次性量化/导出 |
+| [outputs/baseline_results.md](outputs/baseline_results.md) | CVM 评测基线（合成 AV 占位，待真实数据） |
+| skill `edge-quantize-deploy` | 可复用的端到端工作流（`.claude/skills/`） |
+
+## 快速复现（Orin，量化产物已在 Orin）
+
 ```bash
-set -a && . configs/orin.env && set +a
-# M1 数据(申请后):
-python data/prepare_physicalai_av.py --out data/av_subset/test.jsonl --max_clips 300
-# M3 量化(Orin 上):
-bash scripts/quantize.sh                 # INT4 AWQ / INT8 SmoothQuant
-bash scripts/export_and_build.sh         # export + 边缘 build engine
-# 评测(本地即可,已测通):
-python eval/evaluate.py --samples data/av_subset/test.jsonl --baseline cvm --label CVM -o outputs/cvm.json
-python eval/evaluate.py --samples preds.jsonl --label "Alpamayo-R1 INT4" -o outputs/llm_int4.json
-# M4 基准(Orin):
-python scripts/benchmark.py --samples data/av_subset/test.jsonl --power -o outputs/bench_int4.json
+cd /home/vision/TensorRT-Edge-LLM
+export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so   # 指向带 sm_87 的插件
+# 性能
+./build_orin/examples/llm/llm_bench --engineDir engines/int4/llm --mode prefill --inputLen 512 --iterations 5  --warmup 2
+./build_orin/examples/llm/llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iterations 20 --warmup 3
+# 功能（VLM 需带视觉塔）
+./build_orin/examples/llm/llm_inference --engineDir engines/int4/llm \
+  --multimodalEngineDir engines/int4/visual --inputFile cosmos_input.json --dumpOutput --maxGenerateLength 128
 ```
+完整构建配方（含 `-DEMBEDDED_TARGET=jetson-orin`）与建引擎命令见 [docs/orin_build_notes.md](docs/orin_build_notes.md)。
 
-## 现状
-- ✅ 评测/CVM/可视化(`eval/`)已从父仓库迁移并**本地测通**(可用合成样本跑)。
-- ✅ **端到端跑通,Orin 上真实出 token**:`nvidia/Cosmos-Reason2-8B` 的 **INT4(AWQ)** + **INT8(SmoothQuant)** 两版均在 Jetson Orin(sm_87)完成 引擎构建→加载→prefill→decode→连贯文本生成。详见 [docs/edge_deploy_status.md](docs/edge_deploy_status.md)。
-- 📊 **性能对照**:INT4 decode 30.9 tok/s(交互式首选,显存 4.6GB);INT8 prefill 3252 tok/s(吞吐首选)。INT4 decode 快 1.57×、INT8 prefill 快 1.9×。
-- 🔧 **FMHA 崩溃已修复**:根因是当初 Orin 构建 TRTEdge 漏传 `-DEMBEDDED_TARGET=jetson-orin`,CMake 默认按 sm_80;86;89 编译并 `-DEXCLUDE_SM_87` 排除了 sm_87 的 FMHA kernel;按官方 Orin 配方重编即通。与量化、模型均无关。
-- 📝 **模型选型说明**:实际落地用 **Cosmos-Reason2-8B**(TRTEdge 直接支持、可 T4 上量化);原计划的 **Alpamayo-R1-10B** 因 FP16-only + 15GB 卡上易 OOM 暂缓。
-- 🔜 M1 数据 / M4 基准 —— 见 [docs/plan.md](docs/plan.md)。
+## 评测轨道（AV 轨迹，本地）
 
-## 数据格式(eval JSONL)
-```json
-{"id":"clip","obs":[[x,y]],"gt":[[x,y]... 64],"pred":[[x,y]... 64]}
-```
-完整里程碑、目录、复用清单、风险见 **[docs/plan.md](docs/plan.md)**。
+CVM 基线 + ADE/FDE/MR 评测脚手架已从父仓库迁移并本地测通（`eval/`），当前用合成 AV 占位；
+数据格式 `{"id":"clip","obs":[[x,y]],"gt":[[x,y]…64],"pred":[[x,y]…64]}`。接真实模型轨迹待 VLA 轨道启动。

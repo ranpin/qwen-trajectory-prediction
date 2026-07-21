@@ -1,4 +1,8 @@
-# ⚠️ 关键调研发现（会改动"定稿"方案）
+# ⚠️ 关键调研发现（历史决策背景，已定案）
+
+> **状态（已定案）**：文末三个待答问题均已确定——设备**仅 Orin**、x86 导出主机**仅 3070 8GB 故改用免费 Kaggle**、
+> 方案选 **Opt1 混合**。量化轨道（Cosmos-Reason2-8B）**已在 Orin 端到端跑通**（见 [edge_deploy_status.md](edge_deploy_status.md)）；
+> VLA 轨道（Alpamayo-R1-10B FP16）暂缓。本文保留作为选型理由的历史记录。
 
 来自 NVIDIA/TensorRT-Edge-LLM 官方文档(v0.9.0)的三条硬事实,直接影响上一版 plan:
 
@@ -39,7 +43,7 @@ system with an NVIDIA GPU**"。边缘设备只负责 build engine + 推理。
 **建议 Opt1**:量化技能落在能量化的模型上,Alpamayo 作为"10B AV VLA 边缘 FP16 部署"。简历同时覆盖
 量化 + 边缘 VLA + 自动驾驶轨迹。
 
-## 需你回答
-1. **设备**:你有 Jetson **Thor** 吗?还是**只有 Orin**?(决定 Alpamayo 部署风险)
-2. **x86 导出主机**:只有 8GB 3070?能否用更大内存/显存的机器做一次性导出?
-3. **方案**:Opt1 / Opt2 / Opt3?
+## 定案答复（历史）
+1. **设备**:仅 Jetson **Orin** AGX（无 Thor）。→ Alpamayo-on-Orin 列为风险、暂缓；量化轨道不受影响。
+2. **x86 导出主机**:仅 8GB 3070，装不下 8B/10B → 改用**免费 Kaggle 2×T4=32GB** 一次性导出/量化。
+3. **方案**:选 **Opt1 混合**。→ Cosmos-Reason2-8B 量化轨道已跑通；Alpamayo VLA 轨道暂缓。

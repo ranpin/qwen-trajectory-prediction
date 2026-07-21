@@ -38,7 +38,7 @@
 
 ## 目录结构（`alpamayo-edge/`）
 ```
-docs/{plan.md, FINDINGS.md}
+docs/{plan.md, FINDINGS.md, M0_setup.md, edge_deploy_status.md(结果报告), orin_build_notes.md(工程日志)}
 configs/orin.env
 eval/  metrics.py  baselines.py(CVM)  evaluate.py  viz.py(BEV)  action_to_traj.py(accel,κ→xy)   # 已本地测通
 scripts/ quantize.sh(Cosmos-Reason2 INT4/INT8)  export_and_build.sh(Alpamayo FP16)
