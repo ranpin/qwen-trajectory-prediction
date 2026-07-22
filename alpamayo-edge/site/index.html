@@ -97,10 +97,10 @@ footer a{color:var(--accent)}
 
   <h3>1.1 性能：延迟 / 吞吐 / 显存 / 功耗 / 能效</h3>
   <div class="grid2">
-    <figure><img src="figures/bench_throughput.png" alt="throughput"><figcaption>吞吐：prefill 计算密集 → INT8 快 1.9×；decode 访存密集 → INT4 快 1.57×</figcaption></figure>
-    <figure><img src="figures/bench_power_energy.png" alt="power & energy"><figcaption>功耗与能效：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×</figcaption></figure>
-    <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption>INT4 decode 上下文涨 31× 仅慢 9%，长上下文扩展性好</figcaption></figure>
-    <figure><img src="figures/footprint.png" alt="footprint"><figcaption>体积：INT4 约省 42%，从容装进 Orin 29GB 统一内存</figcaption></figure>
+    <figure><img src="figures/bench_throughput.png" alt="throughput"><figcaption><strong>横轴</strong>：两组柱=Prefill(512 token 输入) / Decode(每 token) 两阶段。<strong>竖轴</strong>：吞吐(tokens/秒，越高越快)。<strong>结果</strong>：prefill 计算密集→INT8 快 1.9×；decode 访存密集→INT4 快 1.57×。</figcaption></figure>
+    <figure><img src="figures/bench_power_energy.png" alt="power & energy"><figcaption><strong>横轴</strong>：Prefill / Decode 两阶段(两子图同)。<strong>竖轴</strong>：左=整机功耗(瓦，三电轨之和)，右=能效(tokens/焦耳，对数轴，越高越省电)。<strong>结果</strong>：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×。</figcaption></figure>
+    <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption><strong>横轴</strong>：上下文长度(past-KV token 数，128→4000)。<strong>竖轴</strong>：INT4 decode 吞吐(tokens/秒)。<strong>结果</strong>：上下文涨 31× 吞吐仅降 9%，长上下文扩展性好。</figcaption></figure>
+    <figure><img src="figures/footprint.png" alt="footprint"><figcaption><strong>横轴</strong>：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)。<strong>竖轴</strong>：体积(GB)。<strong>结果</strong>：INT4 比 INT8 约省 42%，从容装进 Orin 29GB 统一内存。</figcaption></figure>
   </div>
   <table>
     <tr><th>指标（Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN, batch=1）</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
@@ -114,7 +114,7 @@ footer a{color:var(--accent)}
   <p style="font-size:12.5px;color:var(--muted)">上下文/批处理 sweep（INT4）：prefill inputLen 128→1024 吞吐 1485→1720（1024 趋稳），batch1 已算力饱和；decode pastKVLen 128→4000（涨 31×）仅掉 9%。多模态图像路径（视觉塔+deepstack+INT4 LLM）端到端验证正确。</p>
 
   <h3>1.2 精度：量化掉点（vs FP16 基线）</h3>
-  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption>量化掉点：INT4(AWQ) 的 perplexity 增幅（+9.8%）显著小于 INT8(SmoothQuant)（+18.1%），贪心路径也跟随 FP16 更久</figcaption></figure>
+  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><strong>横轴</strong>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)。<strong>竖轴</strong>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数。<strong>结果</strong>：INT4(AWQ) 掉点 +9.8% 显著小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久。</figcaption></figure>
   <table>
     <tr><th>指标</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
     <tr><td>平均 perplexity（越低越好）</td><td>1.237</td><td class="win">1.359</td><td>1.460</td></tr>
