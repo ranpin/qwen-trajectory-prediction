@@ -96,6 +96,20 @@ footer a{color:var(--accent)}
     批量 / 长上下文 / 高吞吐 → <strong>INT8</strong>（prefill 快 1.9×、能效高 2.3×、功耗更低）。两者在不同阶段各自既更快又更省电。
   </div>
 
+  <h2>量化掉点（vs FP16 基线）</h2>
+  <p>Orin 无外网、8B fp16≈16GB 本地装不下，故在 <strong>Kaggle T4×2</strong> 用 PyTorch 加载 FP16 原模型做一次性参考。对同一批 12 条固定 prompt（驾驶物理推理+决策+常识，贪心确定性），用 FP16 模型对 INT4/INT8 的<strong>实际输出</strong>做 teacher-forced perplexity 打分（"原模型对量化输出有多惊讶"）。</p>
+  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption>量化掉点：INT4(AWQ) 的 perplexity 增幅（+9.8%）显著小于 INT8(SmoothQuant)（+18.1%），贪心路径也跟随 FP16 更久</figcaption></figure>
+  <table>
+    <tr><th>指标</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
+    <tr><td>平均 perplexity（越低越好）</td><td>1.237</td><td class="win">1.359</td><td>1.460</td></tr>
+    <tr><td>PPL 相对 FP16 增幅</td><td>—</td><td class="win">+9.8%</td><td>+18.1%</td></tr>
+    <tr><td>与 FP16 贪心一致前缀占比</td><td>100%</td><td class="win">16.4%</td><td>5.7%</td></tr>
+  </table>
+  <div class="callout">
+    <div class="t">发现：INT4 既更快（decode）又更保真</div>
+    AWQ 是激活感知的纯权重 4bit（W4A16），保留输出分布更好；INT8 SmoothQuant 为 W8A8、连激活也量化，本推理负载上对分布扰动更大。<strong>诚实口径</strong>：该 PPL 是对模型自身贪心输出的相对打分（绝对值偏低，看增幅），且对比的是已部署 TRT 引擎 vs FP16 PyTorch，捕获的是"量化+引擎+后端"的总部署差距，非纯量化误差。
+  </div>
+
   <h2>最硬的工程亮点：定位并修复 FMHA 崩溃</h2>
   <p>推理一进 attention 就 <code>There must be one kernel to implement the MHA</code> 崩溃。通过<strong>读崩溃点源码 → 插桩打印运行时 kernel hashKey → 查编译宏 → 追到 CMake 默认分支</strong>，定位真根因：</p>
   <div class="callout warn">
@@ -114,7 +128,7 @@ footer a{color:var(--accent)}
   <h2>诚实的边界</h2>
   <ul>
     <li><strong>无轨迹预测</strong>：ADE/FDE vs CVM 属于 VLA 轨道（Alpamayo-R1-10B FP16），大工程，暂缓。</li>
-    <li><strong>无 FP16 基线</strong>：只有 INT4-vs-INT8 相对对比，尚无"掉点 &lt;X%"绝对数字。</li>
+    <li><strong>精度轴为相对退化口径</strong>：有 FP16 参考下的掉点数字，但为"量化+引擎+后端"的总部署差距，非纯量化误差，也非带标注的下游任务正确率。</li>
     <li>量化标的从 Alpamayo 改为 Cosmos，因 Alpamayo 只支持 FP16、不能量化（工具硬约束）。</li>
   </ul>
 
