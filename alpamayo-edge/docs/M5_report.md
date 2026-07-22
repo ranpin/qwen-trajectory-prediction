@@ -28,8 +28,8 @@
 
 | 场景 | 选 | 理由（实测） |
 |---|---|---|
-| 交互式 / 单流低延迟 / 省电 / 精度敏感 | **INT4** | decode 30.9 tok/s（高 57%）、能效 0.82 tok/J（高 64%）、显存 ~4.6GB（省 42%）、掉点 +9.8% |
-| 批量 / 长上下文 / 高吞吐 | **INT8** | prefill 3252 tok/s（快 1.9×）、能效 62.8 tok/J（高 2.3×）、功耗更低（掉点 +18.1%） |
+| 交互式 / 单流低延迟 / 省电 / 精度敏感 | **INT4** | decode 30.9 TPS（高 57%）、能效 0.82 tok/J（高 64%）、显存 ~4.6GB（省 42%）、掉点 +9.8% |
+| 批量 / 长上下文 / 高吞吐 | **INT8** | prefill 3252 TPS（快 1.9×）、能效 62.8 tok/J（高 2.3×）、功耗更低（掉点 +18.1%） |
 
 （环境：Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN；batch=1，prefill 512 tok，decode pastKV=512。sweep：decode 上下文涨 31× 仅掉 9%；多模态图像路径端到端验证正确。）
 
@@ -47,20 +47,20 @@
 - **模型/权重**：`nvidia/Cosmos-Reason2-8B`（HF 门控，NVIDIA 预训练；**只量化不训练**）。36 层·hidden 4096·GQA 32/8·RoPE 262144·vocab 151936。
 - **量化**：ModelOpt PTQ。INT4=AWQ(W4A16)、INT8=SmoothQuant(W8A8)。**校准集 = 默认 512 篇 CNN/DailyMail 新闻文本（非驾驶域，重要 caveat）**；视觉塔未量化保 fp16。
 - **数据**：精度 = 12 条手写 prompt（无标注、非 benchmark）；性能 = llm_bench 合成序列。
-- **指标**：延迟/吞吐 = llm_bench E2E（mean±std, warmup3+iter10）；功耗 = tegrastats 三轨和；能效 = tok/s÷W；掉点 = FP16 模型 teacher-forced perplexity + token 一致率。
+- **指标**：延迟/吞吐 = llm_bench E2E（mean±std, warmup3+iter10）；功耗 = tegrastats 三轨和；能效 = TPS÷W；掉点 = FP16 模型 teacher-forced perplexity + token 一致率。
 - 完整定义、命令、校准影响分析见 **[METHODOLOGY.md](METHODOLOGY.md)**。
 
 ## 三、思考讨论
 
 - **为何 INT4 掉点反而更小**：AWQ 纯权重量化（激活留 16bit）对校准域错配更鲁棒；INT8 SmoothQuant 连激活也量化、更敏感——**是 INT8 掉点更大的合理主因之一（未做消融）**。可验证后续：驾驶域校准集重量化再比。
-- **能用来干什么**：① 可复用的边缘量化部署方法论（沉淀为 skill `edge-quantize-deploy`）；② 可实时查询的车载场景推理系统（~30 tok/s @ ~40W）；③ 完整 INT4-vs-INT8 边缘权衡实证。
+- **能用来干什么**：① 可复用的边缘量化部署方法论（沉淀为 skill `edge-quantize-deploy`）；② 可实时查询的车载场景推理系统（~30 TPS @ ~40W）；③ 完整 INT4-vs-INT8 边缘权衡实证。
 - **诚实的边界**：① 无轨迹预测（VLA 轨道暂缓）；② 精度为相对退化口径（"量化+引擎+后端"总差距，非纯量化误差、非任务正确率）；③ 校准集非驾驶域；④ 量化标的由 Alpamayo 改 Cosmos（Alpamayo 只支持 FP16 不能量化）。
 - 实验全过程的问题/根因/解决（含 FMHA 崩溃跨层根因）见 **[PROBLEMS.md](PROBLEMS.md)**。
 
 ## 简历 bullet（实测数）
 
 - 用 NVIDIA TensorRT-Edge-LLM 将 8B 多模态大模型 (Cosmos-Reason2) 量化为 INT4/INT8 并部署至 Jetson Orin，
-  实测 **INT4 decode 30.9 tok/s @ ~40W (0.82 tok/J)**、**INT8 prefill 3252 tok/s (62.8 tok/J)**，
+  实测 **INT4 decode 30.9 TPS @ ~40W (0.82 tok/J)**、**INT8 prefill 3252 TPS (62.8 tok/J)**，
   并用 FP16 参考量化掉点（**INT4 perplexity +9.8% / INT8 +18.1%**），给出"decode 选 INT4、prefill 选 INT8"的选型依据。
 - 定位并修复 sm_87 上的 FMHA kernel 派发崩溃：从崩溃断言追到 CMake 构建配置（漏传 Orin target flag
   致 sm_87 kernel 被编译排除），非平凡的跨层（运行时 kernel 表 ↔ 编译宏 ↔ CMake）根因排查。
@@ -68,6 +68,6 @@
 
 > Resume (EN): *Quantized an 8B multimodal VLM (Cosmos-Reason2) to INT4/INT8 with NVIDIA
 > TensorRT-Edge-LLM and deployed it to Jetson Orin; measured the full latency/throughput/memory/
-> power/energy tradeoff (INT4 decode 30.9 tok/s @ ~40W; INT8 prefill 3252 tok/s) and quantization
+> power/energy tradeoff (INT4 decode 30.9 TPS @ ~40W; INT8 prefill 3252 TPS) and quantization
 > drop-off vs an FP16 reference (INT4 perplexity +9.8% vs INT8 +18.1%), and root-caused a hard
 > sm_87 FMHA kernel-dispatch crash down to a missing CMake target flag.*
