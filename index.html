@@ -34,8 +34,16 @@ th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
 .win{color:var(--accent);font-weight:700}
 figure{margin:18px 0;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px}
-figure img{width:100%;height:auto;border-radius:5px;display:block}
+figure img{width:100%;height:auto;border-radius:5px;display:block;cursor:zoom-in}
 figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center}
+figcaption .zoom{color:var(--accent);font-weight:600}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:2000;cursor:zoom-out;padding:24px}
+#lb img{max-width:96vw;max-height:90vh;width:auto;height:auto;border-radius:6px;box-shadow:0 10px 48px rgba(0,0,0,.6);background:#fff}
+#lb .hint{position:fixed;top:14px;right:18px;color:#fff;font-size:13px;opacity:.85}
+details.gloss{margin:14px 0;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px 14px}
+details.gloss summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--accent);padding:8px 0}
+details.gloss table{margin:6px 0 10px}
+details.gloss td:first-child{white-space:nowrap;font-weight:600;color:var(--text);width:1%}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:12.5px;background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
 .io-table td{vertical-align:top}
@@ -72,6 +80,21 @@ footer a{color:var(--accent)}
   <p>实测两例即其本职：喂海滩图 → 准确描述场景；问"湿路为何刹车距离变长" → 讲摩擦力下降与打滑。产出的是<strong>理解与推理</strong>，不是路点坐标。</p>
 
   <h2>核心结果</h2>
+  <p style="font-size:13px;color:var(--muted);margin-top:-2px">📊 图表可<strong class="zoom" style="color:var(--accent)">点击放大</strong>（再点任意处或按 Esc 还原）。不熟悉指标可先展开下面的说明。</p>
+  <details class="gloss">
+    <summary>▸ 指标怎么读（点开）</summary>
+    <table>
+      <tr><td>Prefill 预填充</td><td>一次性并行"读完"输入 prompt 的所有 token（读题阶段）。计算密集，看整体处理速度。</td></tr>
+      <tr><td>Decode 解码</td><td>逐个 token 自回归生成输出（答题阶段），每步只出 1 个 token。访存密集——每步都要把权重从显存搬一遍，所以权重越小越快。</td></tr>
+      <tr><td>tok/s 吞吐</td><td>每秒处理/生成的 token 数，越高越好。</td></tr>
+      <tr><td>tok/J 能效</td><td>每焦耳能量处理的 token 数（= 吞吐 ÷ 功耗）。越高越省电，是电池/散热受限的边缘设备的关键指标。</td></tr>
+      <tr><td>载入显存</td><td>引擎加载后占用的内存。Orin 是 CPU/GPU 共享的 29GB "统一内存"。</td></tr>
+      <tr><td>perplexity 困惑度</td><td>模型对一段文本的"意外程度"，越低=越符合模型预期。这里用 FP16 原模型给量化输出打分，<strong>增幅越小 = 量化越保真</strong>。</td></tr>
+      <tr><td>一致前缀</td><td>贪心解码下，量化输出与 FP16 输出逐 token 相同的最长开头长度。</td></tr>
+      <tr><td>W4A16 / W8A8</td><td>量化位宽记法：权重 4bit·激活 16bit（AWQ）／ 权重 8bit·激活 8bit（SmoothQuant）。</td></tr>
+      <tr><td>MAXN · sm_87</td><td>MAXN = Orin 最高性能功耗模式；sm_87 = Orin GPU 的 CUDA 架构代号（Ampere）。</td></tr>
+    </table>
+  </details>
   <div class="grid2">
     <figure><img src="figures/bench_throughput.png" alt="throughput"><figcaption>吞吐：prefill 计算密集 → INT8 快 1.9×；decode 访存密集 → INT4 快 1.57×</figcaption></figure>
     <figure><img src="figures/bench_power_energy.png" alt="power & energy"><figcaption>功耗与能效：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×</figcaption></figure>
@@ -137,5 +160,18 @@ footer a{color:var(--accent)}
     · 结果报告 <code>docs/edge_deploy_status.md</code> · 工程日志 <code>docs/orin_build_notes.md</code>
   </footer>
 </div>
+
+<div id="lb"><span class="hint">点击任意处关闭 · Esc</span><img alt="放大图"></div>
+<script>
+(function(){
+  var lb=document.getElementById('lb'), im=lb.querySelector('img');
+  document.querySelectorAll('figure img').forEach(function(g){
+    g.addEventListener('click', function(){ im.src=g.currentSrc||g.src; lb.style.display='flex'; });
+  });
+  function close(){ lb.style.display='none'; im.removeAttribute('src'); }
+  lb.addEventListener('click', close);
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') close(); });
+})();
+</script>
 </body>
 </html>
