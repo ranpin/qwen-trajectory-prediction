@@ -12,19 +12,19 @@
 ## 一、核心结果
 
 ![throughput](figures/bench_throughput.png)
-> **横轴**：Prefill(512 token 输入) / Decode(每 token) 两阶段。**竖轴**：吞吐(tokens/秒，越高越快)。**结果**：prefill 计算密集→INT8 快 1.9×；decode 访存密集→INT4 快 1.57×。
+> **横轴**：Prefill(512 token 输入) / Decode(每 token) 两阶段。**竖轴**：吞吐(tokens/秒)。**结果**：prefill INT8 快 1.9×；decode INT4 快 1.57×。**分析**：prefill 计算密集→INT8 原生张量核占优；decode 访存密集(每步搬全部权重)→INT4 权重小更快 → 交互式选 INT4、批量选 INT8。
 
 ![power & energy](figures/bench_power_energy.png)
-> **横轴**：Prefill / Decode 两阶段（两子图同）。**竖轴**：左=整机功耗(瓦，三电轨之和)，右=能效(tokens/焦耳，对数轴)。**结果**：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×。
+> **横轴**：Prefill / Decode 两阶段（两子图同）。**竖轴**：左=整机功耗(瓦，三电轨之和)，右=能效(tokens/焦耳，对数轴)。**结果**：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×。**分析**：能效=吞吐÷功耗，各阶段吞吐赢家功耗还不劣；边缘设备电/热受限，能效常比绝对速度更关键。
 
 ![decode scaling](figures/decode_scaling.png)
-> **横轴**：上下文长度(past-KV token 数，128→4000)。**竖轴**：INT4 decode 吞吐(tokens/秒)。**结果**：上下文涨 31× 吞吐仅降 9%，长上下文扩展性好。
+> **横轴**：上下文长度(past-KV token 数，128→4000)。**竖轴**：INT4 decode 吞吐(tokens/秒)。**结果**：上下文涨 31× 吞吐仅降 9%。**分析**：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 → 适合长对话/长文档。
 
 ![footprint](figures/footprint.png)
-> **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)。**竖轴**：体积(GB)。**结果**：INT4 比 INT8 约省 42%，从容装进 Orin 29GB 统一内存。
+> **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)。**竖轴**：体积(GB)。**结果**：INT4 比 INT8 约省 42%。**分析**：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存。
 
 ![accuracy drop-off](figures/accuracy_dropoff.png)
-> **横轴**：左=平均 perplexity，右=与 FP16 的一致性(一致前缀占比 % / 长度 token)。**竖轴**：左=perplexity(越低越贴近 FP16，虚线=FP16 基线 1.237)，右=百分比 / token 数。**结果**：INT4 掉点 +9.8% 小于 INT8 +18.1%，贪心路径跟随 FP16 更久。
+> **横轴**：左=平均 perplexity，右=与 FP16 的一致性(一致前缀占比 % / 长度 token)。**竖轴**：左=perplexity(越低越贴近 FP16，虚线=FP16 基线 1.237)，右=百分比 / token 数。**结果**：INT4 掉点 +9.8% 小于 INT8 +18.1%。**分析**：INT4(W4A16 纯权重、激活留 16bit)对校准域错配更鲁棒，INT8(W8A8)连激活量化更敏感 → 掉点更大；本负载 INT4 既快又保真。
 
 | 场景 | 选 | 理由（实测） |
 |---|---|---|
