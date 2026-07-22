@@ -3,12 +3,28 @@
 > 本文件回答四个根本问题:**模型/权重从哪来、数据集是什么、指标怎么定义与测、量化用了什么校准集及其影响**。
 > 所有数字均为实测、可复现;无标注/未测的地方明确标注,不外推。更新:2026-07-22。
 
+## 0. 来源与版本总表（全部实测，可追溯）
+
+> 值均取自实际环境（`git rev-parse` / `dpkg -l` / `cat /etc/nv_tegra_release` / `nvcc` / config.json / 运行日志），非记忆、非编造。**未 pin 的版本如实标注**——诚实优先于好看。
+
+| 类别 | 型号 / 版本 | 下载地址 / 取证 | 备注 |
+|---|---|---|---|
+| **模型** | `nvidia/Cosmos-Reason2-8B` | https://huggingface.co/nvidia/Cosmos-Reason2-8B （**门控**） | NVIDIA 预训练；**我们只推理量化、不训练**。**revision 未 pin**（导出时下载 main 最新，未记 commit）→ 建议 `from_pretrained(revision=…)` 固定 |
+| 模型架构（实测） | 36 层 · hidden 4096 · 32 Q 头 · **8 KV 头(GQA)** · headDim 128 · RoPE 262144 · vocab 151936 · eos `[151645,151643]` | `edge_int4/…/llm/config.json` + Orin `LLMEngineConfig` 日志 | Qwen2.5-VL 系 8B backbone；`AutoModelForImageTextToText` 可加载 |
+| **量化校准集** | `cnn_dailymail` config **3.0.0**，split `train` 前 **512** 篇 `article` | https://huggingface.co/datasets/cnn_dailymail | 实测 `quantize.py`；纯文本路径，非驾驶域（见 §4） |
+| **精度探针集** | 12 条手写 prompt（无标注） | `eval/accuracy/prompts_greedy.json`（本仓库） | 非标准 benchmark |
+| **量化/部署框架** | NVIDIA **TensorRT-Edge-LLM v0.9.0** @ `1ac0f2b9…`（2026-07-02） | https://github.com/NVIDIA/TensorRT-Edge-LLM | Orin 建引擎/运行即此 commit（实测 `git rev-parse`）。**Kaggle 量化/导出用 `git clone --depth 1`（main@运行日，未 pin）** → 建议同 pin v0.9.0 |
+| 量化后端 | NVIDIA TensorRT-Model-Optimizer (ModelOpt)，随 TRTEdge `.[tools]` 装 | 同上（依赖） | 具体版本随 TRTEdge 依赖，未单独 pin |
+| **边缘设备** | **NVIDIA Jetson AGX Orin Developer Kit**（sm_87 Ampere，统一内存 29 GB，**MAXN**） | 实测 `/proc/device-tree/model`、`nvpmodel -q` | — |
+| Orin 系统栈 | L4T **R36.4.4**（GCID 41062509，2025-06-16）= JetPack 6.2｜CUDA **12.6.11**｜TensorRT **10.7.0.23**（+cuda12.6）｜Python 3.10.12 | `/etc/nv_tegra_release`、`/usr/local/cuda/version.json`、`dpkg -l` | — |
+| **云端**（量化/导出/FP16 参考） | Kaggle：**2× Tesla T4**（15360 MiB，sm_75）｜Python 3.12｜`machine_shape=NvidiaTeslaT4` | kaggle.com（私有 kernel） | torch 预装（支持 sm_70–sm_120，约 2.7，**未 pin**）；transformers 用 `pip install -U 'transformers>=4.51'`（**具体版本未 pin**）→ 建议锁版 |
+
 ## 1. 模型与权重来源
 
 | 项 | 事实 | 来源/证据 |
 |---|---|---|
-| 模型 | `nvidia/Cosmos-Reason2-8B` | HuggingFace(**门控**仓库,需接受许可+授权 token) |
-| 权重 | NVIDIA 预训练权重,**我们未做任何训练/微调** | 直接从 HF 下载 fp16 权重 |
+| 模型 | `nvidia/Cosmos-Reason2-8B` | HuggingFace(**门控**仓库,需接受许可+授权 token)：https://huggingface.co/nvidia/Cosmos-Reason2-8B |
+| 权重 | NVIDIA 预训练权重,**我们未做任何训练/微调** | 直接从 HF 下载 fp16 权重（revision 未 pin，见 §0） |
 | 架构(实测 config.json) | 36 decoder 层 · hidden 4096 · 32 注意力头 · **8 KV 头(GQA)** · headDim 128 · RoPE 上下文 262144 · vocab 151936 · eos `[151645,151643]` | `edge_int4/…/llm/config.json` 与 Orin `LLMEngineConfig` 日志一致 |
 | 类型 | 物理场景推理**多模态 VLM**(Qwen2.5-VL 系 backbone),HF `AutoModelForImageTextToText` 可加载 | 加载日志 |
 
@@ -24,7 +40,7 @@
 
 ## 3. 指标定义与测量方法(全部可复现)
 
-**环境**:Jetson Orin (sm_87) / JetPack 6 / CUDA 12.6 / TRT 10.7 / **MAXN** 功耗模式;batch=1。
+**环境**（精确版本见 §0）:Jetson AGX Orin Developer Kit (sm_87) / L4T R36.4.4 (JetPack 6.2) / CUDA 12.6.11 / TensorRT 10.7.0.23 / TensorRT-Edge-LLM v0.9.0@`1ac0f2b` / **MAXN**;batch=1。
 
 ### 3.1 延迟 / 吞吐 —— `llm_bench`
 ```bash
@@ -55,7 +71,7 @@ llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iteratio
 
 | 项 | 事实(实测 quantize.py) |
 |---|---|
-| 校准集 | **`cnn_dailymail` 3.0.0,train split 前 512 篇 `article`**(通用英文新闻文本) |
+| 校准集 | **`cnn_dailymail` config 3.0.0,train split 前 512 篇 `article`**(通用英文新闻文本；https://huggingface.co/datasets/cnn_dailymail ) |
 | 校准样本数 | **512**(`--num_samples` 默认) |
 | 校准路径 | **纯文本** `_text_calib_dataloader`(不走视觉塔;calib batch:AWQ=16 / SmoothQuant=1) |
 | INT4 (AWQ, W4A16) | 权重 4bit group-wise + 激活 16bit;用校准算**激活感知 per-channel pre-quant scales**,保护显著权重通道 |
