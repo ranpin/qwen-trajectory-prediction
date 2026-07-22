@@ -1,0 +1,21 @@
+{
+    "batch_size": 1,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "max_generate_length": 200,
+    "requests": [
+        {"messages": [{"role": "user", "content": "In one paragraph, explain why braking distance increases on wet roads."}]},
+        {"messages": [{"role": "user", "content": "A pedestrian steps into the crosswalk ahead while your vehicle is moving at 40 km/h. List the sequence of driving actions you should take."}]},
+        {"messages": [{"role": "user", "content": "Explain what hydroplaning is and how a driver can reduce the risk of it."}]},
+        {"messages": [{"role": "user", "content": "Why does stopping distance grow roughly with the square of speed? Explain the physics."}]},
+        {"messages": [{"role": "user", "content": "You are driving at night on an unlit rural road. List the main hazards and how to mitigate each."}]},
+        {"messages": [{"role": "user", "content": "Describe the correct procedure if your vehicle begins to skid on black ice."}]},
+        {"messages": [{"role": "user", "content": "Explain the two-second following-distance rule and why it should increase in poor conditions."}]},
+        {"messages": [{"role": "user", "content": "A cyclist is riding in your lane on a narrow road. Explain how and when to overtake them safely."}]},
+        {"messages": [{"role": "user", "content": "What should a driver do immediately if a front tire blows out at highway speed?"}]},
+        {"messages": [{"role": "user", "content": "Explain how anti-lock braking systems (ABS) help a driver maintain control during hard braking."}]},
+        {"messages": [{"role": "user", "content": "In two or three sentences, state Newton's second law and give an everyday example."}]},
+        {"messages": [{"role": "user", "content": "Briefly explain the difference between weather and climate."}]}
+    ]
+}

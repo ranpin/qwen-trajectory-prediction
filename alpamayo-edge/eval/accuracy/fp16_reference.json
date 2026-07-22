@@ -1,0 +1,247 @@
+{
+  "model": "nvidia/Cosmos-Reason2-8B",
+  "max_new_tokens": 160,
+  "n_prompts": 12,
+  "results": [
+    {
+      "idx": 0,
+      "prompt": "In one paragraph, explain why braking distance increases on wet roads.",
+      "fp16_output": "Braking distance increases on wet roads because water reduces the friction between the vehicle's tires and the road surface. When the road is wet, the tires may hydroplane, causing them to lose contact with the pavement and slide instead of gripping it. This loss of traction significantly extends the distance required to stop. Additionally, water can create a thin layer between the tires and the road, further diminishing the effectiveness of the brakes. Factors like speed, tire condition, and road slope also influence braking distance, but the primary reason is the reduced friction caused by moisture on the road surface.",
+      "ppl_fp16_own": 1.2919154816952185,
+      "ppl_int4": 1.45594048727359,
+      "ppl_int8": 1.4249440261771076,
+      "agree_int4": {
+        "ref_len": 115,
+        "cand_len": 111,
+        "common_prefix": 21,
+        "prefix_frac": 0.1826086956521739
+      },
+      "agree_int8": {
+        "ref_len": 115,
+        "cand_len": 133,
+        "common_prefix": 7,
+        "prefix_frac": 0.06086956521739131
+      }
+    },
+    {
+      "idx": 1,
+      "prompt": "A pedestrian steps into the crosswalk ahead while your vehicle is moving at 40 km/h. List the sequence of driving actions you should take.",
+      "fp16_output": "When a pedestrian steps into the crosswalk ahead while your vehicle is moving at 40 km/h, the correct sequence of driving actions should be:\n\n1. **Immediate Reduction in Speed**: Begin decelerating as soon as you notice the pedestrian entering the crosswalk. Do not delay braking.\n\n2. **Assess Distance and Speed**: Calculate how much time and space you have to stop safely. At 40 km/h (≈11.1 m/s), stopping distance on dry pavement is roughly 10–15 meters, depending on reaction time and braking efficiency.\n\n3. **Brake Smoothly and Firmly**: Apply brakes steadily to avoid skidding. Maintain control of the vehicle while coming to a complete stop.\n\n4. **Come to a Complete Stop**: Ensure the",
+      "ppl_fp16_own": 1.2497481168254205,
+      "ppl_int4": 1.4347685085352995,
+      "ppl_int8": 1.3729447164431765,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 21,
+        "prefix_frac": 0.13125
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 62,
+        "common_prefix": 0,
+        "prefix_frac": 0.0
+      }
+    },
+    {
+      "idx": 2,
+      "prompt": "Explain what hydroplaning is and how a driver can reduce the risk of it.",
+      "fp16_output": "**Hydroplaning** is a dangerous driving condition that occurs when a vehicle’s tires lose contact with the road surface and instead ride on a layer of water. This typically happens when there’s a significant amount of water on the road—such as during heavy rain or on poorly drained streets. When the tires can’t disperse the water quickly enough, they lose traction, causing the car to slide or skid uncontrollably.\n\n**How a driver can reduce the risk of hydroplaning:**\n\n1. **Reduce Speed:** Driving at a lower speed gives the tires more time to displace water and maintain contact with the road. The faster you go, the more likely hydroplaning becomes.\n\n2. **Avoid Standing Water:** Stay away from puddles or areas where water has accumulated,",
+      "ppl_fp16_own": 1.2207255155404795,
+      "ppl_int4": 1.4188234122589756,
+      "ppl_int8": 1.3574879542492164,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 32,
+        "prefix_frac": 0.2
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 0,
+        "prefix_frac": 0.0
+      }
+    },
+    {
+      "idx": 3,
+      "prompt": "Why does stopping distance grow roughly with the square of speed? Explain the physics.",
+      "fp16_output": "The stopping distance of a vehicle grows roughly with the square of its speed due to the relationship between kinetic energy, work, and the forces involved in deceleration. Here's the physics explanation:\n\n---\n\n**1. Kinetic Energy and Work-Energy Principle:**\n\nThe kinetic energy (KE) of a moving object is given by:\n\n\\[\nKE = \\frac{1}{2}mv^2\n\\]\n\nwhere \\( m \\) is mass and \\( v \\) is speed. To stop the vehicle, the brakes must dissipate this kinetic energy. The work done by the braking force (which is approximately constant for a given braking system) is:\n\n\\[\nW = F_{\\text{brake}} \\cdot d\n\\]\n\nwhere \\( d \\) is the stopping distance",
+      "ppl_fp16_own": 1.1538260365225852,
+      "ppl_int4": 1.2642505196867255,
+      "ppl_int8": 1.2243289050227348,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 17,
+        "prefix_frac": 0.10625
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 1,
+        "prefix_frac": 0.00625
+      }
+    },
+    {
+      "idx": 4,
+      "prompt": "You are driving at night on an unlit rural road. List the main hazards and how to mitigate each.",
+      "fp16_output": "Driving at night on an unlit rural road presents several unique hazards. Here's a breakdown of the main risks and how to mitigate them:\n\n1. **Poor Visibility**\n   - *Hazard:* Limited lighting makes it hard to see the road, obstacles, or other road users.\n   - *Mitigation:* Use high beams when appropriate (but dim them if approaching or following another vehicle). Ensure headlights are clean and properly aligned. Drive slower to allow more reaction time.\n\n2. **Wildlife Crossing**\n   - *Hazard:* Animals may dart onto the road unexpectedly, especially near fields or wooded areas.\n   - *Mitigation:* Stay alert for animal movement, especially near ditches or fields. Scan the road ahead and to the sides. Be prepared to brake gently if an animal appears",
+      "ppl_fp16_own": 1.2465693795397659,
+      "ppl_int4": 1.3454873205558693,
+      "ppl_int8": 1.6222199061211162,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 15,
+        "prefix_frac": 0.09375
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 13,
+        "prefix_frac": 0.08125
+      }
+    },
+    {
+      "idx": 5,
+      "prompt": "Describe the correct procedure if your vehicle begins to skid on black ice.",
+      "fp16_output": "If your vehicle begins to skid on black ice, the correct procedure is to:\n\n1. **Stay Calm and Avoid Panic**: Do not brake suddenly or jerk the steering wheel, as this can worsen the skid.\n\n2. **Ease Off the Accelerator**: Gradually release the gas pedal to reduce speed and regain control.\n\n3. **Steer into the Skid**: Turn the steering wheel in the direction the rear of the vehicle is sliding (e.g., if the back swings right, steer right). This helps align the wheels with the direction of travel.\n\n4. **Avoid Sudden Movements**: Do not pump the brakes or apply heavy pressure. If ABS is not present, gently tap the brakes; if ABS is present, maintain steady pressure.\n\n5. **Maintain",
+      "ppl_fp16_own": 1.2372306805863331,
+      "ppl_int4": 1.455736826945043,
+      "ppl_int8": 1.4690039787949392,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 187,
+        "common_prefix": 21,
+        "prefix_frac": 0.13125
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 20,
+        "prefix_frac": 0.125
+      }
+    },
+    {
+      "idx": 6,
+      "prompt": "Explain the two-second following-distance rule and why it should increase in poor conditions.",
+      "fp16_output": "The **two-second following-distance rule** is a driving guideline that suggests maintaining a gap of at least two seconds between your vehicle and the one in front. To measure this, you can use a simple method: when the car ahead passes a fixed point (like a sign or a tree), start counting seconds until you reach the same point. If it takes less than two seconds, you’re too close.\n\n**Why it should increase in poor conditions:**\n\n1. **Reduced Visibility:** In rain, fog, or darkness, you may not see the vehicle ahead as clearly, leaving less time to react to sudden stops.\n\n2. **Slower Reaction Time:** Wet or slippery roads reduce traction, so braking distances increase. A longer gap gives more time to stop safely if the lead vehicle brakes unexpectedly",
+      "ppl_fp16_own": 1.2571030136386898,
+      "ppl_int4": 1.3529828300932705,
+      "ppl_int8": 1.5462246164506366,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 11,
+        "prefix_frac": 0.06875
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 158,
+        "common_prefix": 11,
+        "prefix_frac": 0.06875
+      }
+    },
+    {
+      "idx": 7,
+      "prompt": "A cyclist is riding in your lane on a narrow road. Explain how and when to overtake them safely.",
+      "fp16_output": "Overtaking a cyclist on a narrow road requires careful planning and adherence to safety rules. Here’s how and when to do it safely:\n\n1. **Assess the Road Conditions**:  \n   - Ensure the road is wide enough for both your vehicle and the cyclist to pass safely. If it’s too narrow, wait until a wider section or a designated passing area is available.\n\n2. **Check for Oncoming Traffic**:  \n   - Look for any approaching vehicles in the opposite lane. Only proceed if there’s sufficient space to pass without forcing oncoming traffic to stop or swerve.\n\n3. **Signal Early and Maintain Distance**:  \n   - Turn on your left indicator well in advance to alert the cyclist and other road users of your intention.  \n   - Maintain a safe following distance (at",
+      "ppl_fp16_own": 1.334284464342996,
+      "ppl_int4": 1.455803770518117,
+      "ppl_int8": 1.6700362577005274,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 5,
+        "prefix_frac": 0.03125
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 5,
+        "prefix_frac": 0.03125
+      }
+    },
+    {
+      "idx": 8,
+      "prompt": "What should a driver do immediately if a front tire blows out at highway speed?",
+      "fp16_output": "If a front tire blows out at highway speed, the driver should:\n\n1. **Stay Calm and Avoid Sudden Movements**: Panic can lead to erratic steering or braking, which could cause loss of control.\n\n2. **Maintain a Straight Path**: Keep the vehicle as straight as possible to prevent swerving. Do not jerk the steering wheel sharply.\n\n3. **Ease Off the Accelerator**: Gradually release the gas pedal to reduce speed without braking hard, which could cause skidding.\n\n4. **Do Not Slam Brakes**: Avoid heavy braking, especially if on a wet or slippery road. Instead, gently apply the brakes to slow down steadily.\n\n5. **Control the Vehicle**: Once speed is reduced, steer gently to keep the car in the lane. If possible, move to",
+      "ppl_fp16_own": 1.3420948482201607,
+      "ppl_int4": 1.4963917510677966,
+      "ppl_int8": 1.4761667182345488,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 17,
+        "prefix_frac": 0.10625
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 174,
+        "common_prefix": 13,
+        "prefix_frac": 0.08125
+      }
+    },
+    {
+      "idx": 9,
+      "prompt": "Explain how anti-lock braking systems (ABS) help a driver maintain control during hard braking.",
+      "fp16_output": "Anti-lock Braking Systems (ABS) help a driver maintain control during hard braking by preventing the wheels from locking up. When a driver applies sudden or heavy pressure on the brake pedal, the ABS sensors detect rapid wheel rotation deceleration, indicating that a wheel is about to lock. The system then rapidly modulates brake pressure—typically at rates of 10 to 20 times per second—by releasing and reapplying brake force to each wheel individually. This pulsating action allows the wheels to continue rotating, maintaining traction between the tires and the road surface. As a result, the driver retains steering control, can steer around obstacles, and reduces the risk of skidding or sliding, especially on slippery surfaces. ABS also helps shorten stopping distances on many road conditions by optimizing braking efficiency without",
+      "ppl_fp16_own": 1.2822498349483467,
+      "ppl_int4": 1.380606764923259,
+      "ppl_int8": 1.3705325338522267,
+      "agree_int4": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 23,
+        "prefix_frac": 0.14375
+      },
+      "agree_int8": {
+        "ref_len": 160,
+        "cand_len": 200,
+        "common_prefix": 2,
+        "prefix_frac": 0.0125
+      }
+    },
+    {
+      "idx": 10,
+      "prompt": "In two or three sentences, state Newton's second law and give an everyday example.",
+      "fp16_output": "Newton's second law states that the acceleration of an object is directly proportional to the net force acting on it and inversely proportional to its mass, expressed as F = ma. An everyday example is pushing a shopping cart: the harder you push (greater force), the faster it accelerates, but if the cart is full (more mass), it accelerates less for the same force.",
+      "ppl_fp16_own": 1.0831422634247192,
+      "ppl_int4": 1.103446073228886,
+      "ppl_int8": 1.6314320759745016,
+      "agree_int4": {
+        "ref_len": 77,
+        "cand_len": 73,
+        "common_prefix": 44,
+        "prefix_frac": 0.5714285714285714
+      },
+      "agree_int8": {
+        "ref_len": 77,
+        "cand_len": 70,
+        "common_prefix": 1,
+        "prefix_frac": 0.012987012987012988
+      }
+    },
+    {
+      "idx": 11,
+      "prompt": "Briefly explain the difference between weather and climate.",
+      "fp16_output": "Weather refers to the short-term atmospheric conditions in a specific place at a specific time, such as temperature, humidity, precipitation, and wind. Climate, on the other hand, describes the long-term average of weather patterns in a region over decades, including typical seasonal variations and extremes. While weather can change daily, climate reflects broader, more stable trends.",
+      "ppl_fp16_own": 1.1421186915083092,
+      "ppl_int4": 1.137848603218093,
+      "ppl_int8": 1.3571876399490204,
+      "agree_int4": {
+        "ref_len": 70,
+        "cand_len": 77,
+        "common_prefix": 14,
+        "prefix_frac": 0.2
+      },
+      "agree_int8": {
+        "ref_len": 70,
+        "cand_len": 73,
+        "common_prefix": 14,
+        "prefix_frac": 0.2
+      }
+    }
+  ]
+}

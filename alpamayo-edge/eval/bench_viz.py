@@ -80,4 +80,20 @@ _bars(ax, ["LLM engine\n(Orin, GB)", "tgz\n(GB)", "Load\nVRAM (GB)"],
       "Footprint: INT4 ~42% smaller (fits Orin unified mem comfortably)", fmt="{:.2f}")
 fig.tight_layout(); fig.savefig(os.path.join(OUT, "footprint.png")); plt.close(fig)
 
+# ---- Fig 5: quantization accuracy drop-off vs FP16 (eval/accuracy/) ----
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4.2))
+# perplexity under the FP16 model (lower = closer to FP16 distribution)
+_bars(a1, ["mean PPL"], [1.359], [1.460], "perplexity (vs FP16=1.237)",
+      "Fidelity: +9.8% vs +18.1%", fmt="{:.3f}")
+a1.axhline(1.237, color="#16a34a", lw=1.6, ls="--")
+a1.annotate("FP16 ref 1.237", (0, 1.237), color="#16a34a", fontsize=9,
+            xytext=(0, 4), textcoords="offset points", ha="center")
+# token agreement with FP16 greedy path
+_bars(a2, ["prefix\nagreement %", "prefix len\n(tok)"], [16.4, 20.1], [5.7, 7.2],
+      "% / tokens", "Greedy-path follow (INT4 longer)", fmt="{:.1f}")
+fig.suptitle("Quantization drop-off vs FP16 (12 driving/reasoning prompts, greedy): INT4 (AWQ) > INT8 (SQ)",
+             fontsize=11)
+fig.tight_layout(rect=(0, 0, 1, 0.96))
+fig.savefig(os.path.join(OUT, "accuracy_dropoff.png")); plt.close(fig)
+
 print("wrote:", ", ".join(sorted(os.listdir(OUT))))

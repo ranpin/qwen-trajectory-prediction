@@ -26,9 +26,9 @@
 | **M1** 数据+口径 | 申请 PhysicalAI-AV;下 200–500 段→eval JSONL(obs/gt,6.4s/64pt/10Hz);CVM 基线 | 本地 | 子集+CVM 数值 | ◻ 待数据审批（合成占位已通） |
 | **M2a** 量化(Cosmos-Reason2-8B) | 云上 INT8/INT4 → export ONNX → scp → Orin build → **推理跑通** | 云→Orin | ≥2 精度引擎 | ✅ 完成（INT4+INT8，Orin 真实出 token） |
 | **M2b** Alpamayo FP16 | 云上 export(onnx/llm+visual+action)→ scp → Orin build | 云→Orin | Orin 上出 1 条轨迹(验证 Orin 可跑) | ◻ 未启动 |
-| **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin | 两张结果表 | ◧ 部分（功能连贯已验；量化掉点定量曲线待做，需 FP16 基线） |
-| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ◧ 大部（INT4/INT8 延迟+吞吐+显存+**功耗/能效+sweep+多模态**已测；仅缺 FP16 点） |
-| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ✅ 大部（[M5_report.md](M5_report.md) 一页总结 + 4 张图表 + 简历 bullet；仅缺 FP16/AV 轨道数据） |
+| **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin+云 | 两张结果表 | ✅ 大部（Cosmos 掉点定量已出：FP16 参考下 PPL INT4 +9.8%/INT8 +18.1% + token 一致率，见 `eval/accuracy/`；仅 AV 轨迹表压在 VLA 轨道） |
+| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ◧ 大部（INT4/INT8 延迟+吞吐+显存+**功耗/能效+sweep+多模态+掉点**已测；仅缺 Orin 上 FP16 延迟点——FP16 仅云端跑了精度参考，未在 Orin 建引擎） |
+| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ✅ 完成（[M5_report.md](M5_report.md) 一页总结 + 5 张图表（含掉点）+ 简历 bullet；仅缺 AV 轨道数据） |
 
 **关键路径/风险点**:M2b(Alpamayo 能否在 Orin FP16 跑通)是最大不确定;跑不通则 VLA 轨道降级为"导出成功+Orin 运行受阻"如实记录,量化轨道(Cosmos)已**独立跑通并出指标**,项目已完整成立。
 
@@ -40,7 +40,7 @@
 |---|---|---|
 | 量化 + 边缘部署（工程主线） | ✅ **超额** | INT4/INT8 双量化 Orin 端到端跑通，额外啃下 FMHA 崩溃根因 |
 | 延迟/吞吐/显存/功耗/能效基准 | ✅ **超额** | 原只要基准表，实际含能效 tok/J、上下文 sweep、多模态 |
-| 精度-延迟-功耗**权衡** | ◧ 部分 | 延迟/功耗/显存三轴齐；**精度轴缺 FP16 基线**，只有 INT4-vs-INT8 相对对比，无"掉点<X%"绝对数字 |
+| 精度-延迟-功耗**权衡** | ✅ **三轴齐** | 延迟/功耗/显存 + **精度轴已补**（FP16 参考下量化掉点 PPL INT4 +9.8%/INT8 +18.1%，2026-07-22 补齐）；口径为总部署差距的相对退化，非纯量化误差 |
 | 量化载体 | ⚠️ **改标的** | 原想量化 Alpamayo，但它**只支持 FP16 不能量化**（[FINDINGS.md](FINDINGS.md) F1，硬约束）→ 量化落在受支持的 Cosmos-Reason2-8B |
 | **AV 轨迹预测（领域本职）** | ❌ **未达成** | 用模型出 6.4s/64 路点、算 ADE/FDE/MR vs CVM——完全没做，整体压在暂缓的 VLA 轨道(M2b)里 |
 | CVM 强基线 | ◧ 仅基线侧 | CVM 在合成数据跑通，但无真实模型轨迹与之对比；真实数据(PhysicalAI-AV)待审批 |
@@ -74,6 +74,7 @@ ADE/FDE/MR+CI · CVM 基线 · 评估驱动 · BEV 可视化 —— 见 `eval/`�
 
 ## 简历表达（填实测数）
 用 **NVIDIA TensorRT-Edge-LLM** 在 **Jetson Orin** 端侧部署自动驾驶多模态栈:对 **Cosmos-Reason2-8B**
-做 **INT4/INT8** 量化(显存 −X% / 延迟 Y ms / 掉点 <Z%),并部署 **10B AV VLA(Alpamayo-R1,含
-flow-matching 轨迹头)** 做轨迹预测,建立含 **CVM 强基线**的 ADE/FDE/MissRate 评测(PhysicalAI-AV 真实子集)。
-技能:模型量化(INT4/INT8/ModelOpt)、边缘部署(Jetson Orin/TensorRT-Edge-LLM)、多模态 VLA、自动驾驶轨迹预测。
+做 **INT4/INT8** 量化(显存 **−42%** / INT4 decode **30.9 tok/s @ ~40W** / 掉点 PPL **+9.8%(INT4)、+18.1%(INT8)** vs FP16),
+给出 decode-选-INT4、prefill-选-INT8 的选型依据。(VLA 轨道:部署 10B Alpamayo-R1 含 flow-matching 轨迹头
++ CVM 强基线 ADE/FDE 评测——暂缓。)
+技能:模型量化(INT4/INT8/AWQ/SmoothQuant/ModelOpt)、边缘部署(Jetson Orin/TensorRT-Edge-LLM)、多模态 VLM、量化精度评测。
