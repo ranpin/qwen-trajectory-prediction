@@ -9,33 +9,33 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--ok:#2ecc71;--warn:#f39c12;--err:#e74c3c;--info:#3498db;--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.75;font-size:16px}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
 .top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);text-decoration:none}
 .top-nav .right{margin-left:auto;display:flex;gap:8px}
 .top-nav a.btn,.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 10px;cursor:pointer;font-size:12px;color:var(--text);text-decoration:none}
 .wrap{max-width:920px;margin:0 auto;padding:calc(var(--nav-h) + 32px) 24px 64px}
-h1{font-size:28px;font-weight:800;margin-bottom:8px;line-height:1.3}
+h1{font-size:30px;font-weight:800;margin-bottom:8px;line-height:1.3}
 .lede{font-size:15px;color:var(--muted);margin-bottom:20px}
-h2{font-size:21px;font-weight:700;margin:38px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
-h3{font-size:16px;font-weight:600;margin:20px 0 8px}
+h2{font-size:23px;font-weight:700;margin:40px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:17.5px;font-weight:600;margin:22px 0 8px}
 p{margin-bottom:10px;color:var(--text2)}
 strong{color:var(--text)}
 ul{margin:6px 0 12px 22px;color:var(--text2)}
 li{margin-bottom:5px}
 .badges{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 8px}
 .badge{background:var(--accentL);color:var(--accentD);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600}
-.callout{padding:14px 16px;border-radius:8px;margin:16px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.callout{padding:15px 17px;border-radius:8px;margin:16px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:15px}
 .callout.ok{border-left-color:var(--ok)} .callout.warn{border-left-color:var(--warn)}
 .callout .t{font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)}
-table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14.5px}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
 .win{color:var(--accent);font-weight:700}
 figure{margin:18px 0;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px}
 figure img{width:100%;height:auto;border-radius:5px;display:block;cursor:zoom-in}
-figcaption{font-size:12.5px;color:var(--muted);margin-top:10px;text-align:left;line-height:1.6}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:10px;text-align:left;line-height:1.65}
 figcaption .zoom{color:var(--accent);font-weight:600}
 figcaption b{display:inline-block;min-width:3.2em;color:var(--accentD);font-weight:700}
 .flow{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:"JetBrains Mono","Fira Code",monospace;font-size:12px;line-height:1.5;color:var(--text2);white-space:pre}
@@ -47,7 +47,7 @@ details.gloss summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--
 details.gloss table{margin:6px 0 10px}
 details.gloss td:first-child{white-space:nowrap;font-weight:600;color:var(--text);width:1%}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:12.5px;background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px;background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
 .io-table td{vertical-align:top}
 footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--border);font-size:13px;color:var(--muted)}
 footer a{color:var(--accent)}
@@ -127,24 +127,7 @@ footer a{color:var(--accent)}
   <h2>二、方法细节（可复现）</h2>
 
   <h3>2.1 方法总览（端到端流程 · 为什么这么设计）</h3>
-<pre class="flow">
- nvidia/Cosmos-Reason2-8B   (HF 门控 · fp16 预训练权重)
-         │  下载
-         ▼
- ☁ 云端 Kaggle T4×2  ──ModelOpt PTQ 量化──►  边缘 ONNX (LLM + fp16 视觉塔)
-      · AWQ(W4A16) / SmoothQuant(W8A8)
-      · 校准集: cnn_dailymail 512 篇
-         │  scp   (Orin 无外网: 云 → 本地 → Orin)
-         ▼
- 🖥 Jetson Orin  ──TensorRT-Edge-LLM llm_build──►  TRT 引擎 (INT4/INT8/FP16, sm_87 专用)
-         │
-         ▼
- 推理 llm_inference / llm_bench   +   tegrastats 采功耗
-         │
-         ▼
- 评测 ├─ 性能: 延迟 / 吞吐 / 显存 / 功耗 / 能效
-      └─ 精度: vs FP16 参考 perplexity + token 一致率
-</pre>
+  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center">端到端流程：源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
   <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
   <p><strong>为什么这么设计</strong>：① 8B（16GB）本地 3070（8GB）装不下、Orin 无外网 → 量化这类<strong>一次性重活放免费云 T4×2</strong>；② 以 <strong>ONNX 作跨平台中间表示</strong>，云端导出与边缘建引擎解耦、可复用；③ TensorRT 引擎按 GPU 架构（sm_87）特化，<strong>必须在目标设备本地构建</strong>；④ 生成式 VLM 无标注任务集 → 精度用 <strong>FP16 参考的相对退化</strong>（perplexity/一致率），与性能轴分离评测。</p>
 
