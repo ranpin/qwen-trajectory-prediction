@@ -37,23 +37,7 @@
 
 ### 2.1 方法总览（端到端流程 · 为什么这么设计）
 
-```
- nvidia/Cosmos-Reason2-8B   (HF 门控 · fp16 预训练权重)
-         │  下载
-         ▼
- ☁ 云端 Kaggle T4×2  ──ModelOpt PTQ 量化──►  边缘 ONNX (LLM + fp16 视觉塔)
-      · AWQ(W4A16) / SmoothQuant(W8A8)   · 校准集: cnn_dailymail 512 篇
-         │  scp   (Orin 无外网: 云 → 本地 → Orin)
-         ▼
- 🖥 Jetson Orin  ──TensorRT-Edge-LLM llm_build──►  TRT 引擎 (INT4/INT8/FP16, sm_87 专用)
-         │
-         ▼
- 推理 llm_inference / llm_bench   +   tegrastats 采功耗
-         │
-         ▼
- 评测 ├─ 性能: 延迟 / 吞吐 / 显存 / 功耗 / 能效
-      └─ 精度: vs FP16 参考 perplexity + token 一致率
-```
+![pipeline](figures/pipeline.png)
 
 **描述**：预训练权重在云端一次性量化并导出 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。
 **为什么这么设计**：① 8B(16GB)本地 3070(8GB)装不下、Orin 无外网 → 量化这类一次性重活放免费云 T4×2；② 以 ONNX 作跨平台中间表示，云端导出与边缘建引擎解耦；③ TensorRT 引擎按 GPU 架构(sm_87)特化，必须在目标设备本地构建；④ 生成式 VLM 无标注任务集 → 精度用 FP16 参考的相对退化，与性能轴分离。
