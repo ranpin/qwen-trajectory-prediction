@@ -35,8 +35,10 @@ tr:nth-child(even){background:var(--bg2)}
 .win{color:var(--accent);font-weight:700}
 figure{margin:18px 0;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px}
 figure img{width:100%;height:auto;border-radius:5px;display:block;cursor:zoom-in}
-figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center}
+figcaption{font-size:12.5px;color:var(--muted);margin-top:10px;text-align:left;line-height:1.6}
 figcaption .zoom{color:var(--accent);font-weight:600}
+figcaption b{display:inline-block;min-width:3.2em;color:var(--accentD);font-weight:700}
+.flow{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:"JetBrains Mono","Fira Code",monospace;font-size:12px;line-height:1.5;color:var(--text2);white-space:pre}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:2000;cursor:zoom-out;padding:24px}
 #lb img{max-width:96vw;max-height:90vh;width:auto;height:auto;border-radius:6px;box-shadow:0 10px 48px rgba(0,0,0,.6);background:#fff}
 #lb .hint{position:fixed;top:14px;right:18px;color:#fff;font-size:13px;opacity:.85}
@@ -97,10 +99,10 @@ footer a{color:var(--accent)}
 
   <h3>1.1 性能：延迟 / 吞吐 / 显存 / 功耗 / 能效</h3>
   <div class="grid2">
-    <figure><img src="figures/bench_throughput.png" alt="throughput"><figcaption><strong>横轴</strong>：两组柱=Prefill(512 token 输入) / Decode(每 token) 两阶段。<strong>竖轴</strong>：吞吐(tokens/秒，越高越快)。<strong>结果</strong>：prefill INT8 快 1.9×；decode INT4 快 1.57×。<strong>分析</strong>：prefill 是计算密集(一次性并行大矩阵乘)，INT8 原生张量核算力占优；decode 是访存密集(每步搬全部权重)，INT4 权重小、搬运少更快 → 交互式选 INT4、预填充/批量选 INT8。</figcaption></figure>
-    <figure><img src="figures/bench_power_energy.png" alt="power & energy"><figcaption><strong>横轴</strong>：Prefill / Decode 两阶段(两子图同)。<strong>竖轴</strong>：左=整机功耗(瓦，三电轨之和)，右=能效(tokens/焦耳，对数轴，越高越省电)。<strong>结果</strong>：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×。<strong>分析</strong>：能效=吞吐÷功耗，两阶段各自的吞吐赢家功耗还不劣，故能效领先；边缘设备电/热受限，能效常比绝对速度更关键。</figcaption></figure>
-    <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption><strong>横轴</strong>：上下文长度(past-KV token 数，128→4000)。<strong>竖轴</strong>：INT4 decode 吞吐(tokens/秒)。<strong>结果</strong>：上下文涨 31× 吞吐仅降 9%。<strong>分析</strong>：decode 延迟由权重搬运主导，注意力随上下文增长的占比小，故长上下文几乎不掉速 → 适合长对话/长文档，无需担心 KV 增长拖垮吞吐。</figcaption></figure>
-    <figure><img src="figures/footprint.png" alt="footprint"><figcaption><strong>横轴</strong>：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)。<strong>竖轴</strong>：体积(GB)。<strong>结果</strong>：INT4 比 INT8 约省 42%。<strong>分析</strong>：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在两版共享的 fp16 词嵌入/视觉塔)；INT4 省下的显存可留给更长 KV cache 或多模型并存。</figcaption></figure>
+    <figure><img src="figures/bench_throughput.png" alt="throughput"><figcaption><b>横轴</b>：Prefill(512 token 输入) / Decode(每 token) 两阶段<br><b>竖轴</b>：吞吐(tokens/秒，越高越快)<br><b>结果</b>：prefill INT8 快 1.9×；decode INT4 快 1.57×<br><b>分析</b>：prefill 计算密集(并行大矩阵乘)→INT8 原生张量核占优；decode 访存密集(每步搬全部权重)→INT4 权重小更快 ⇒ 交互式选 INT4、预填充/批量选 INT8</figcaption></figure>
+    <figure><img src="figures/bench_power_energy.png" alt="power & energy"><figcaption><b>横轴</b>：Prefill / Decode 两阶段(两子图同)<br><b>竖轴</b>：左=整机功耗(瓦，三电轨之和)，右=能效(tokens/焦耳，对数轴，越高越省电)<br><b>结果</b>：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×<br><b>分析</b>：能效=吞吐÷功耗，各阶段吞吐赢家功耗还不劣；边缘设备电/热受限，能效常比绝对速度更关键</figcaption></figure>
+    <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption><b>横轴</b>：上下文长度(past-KV token 数，128→4000)<br><b>竖轴</b>：INT4 decode 吞吐(tokens/秒)<br><b>结果</b>：上下文涨 31× 吞吐仅降 9%<br><b>分析</b>：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 ⇒ 适合长对话/长文档</figcaption></figure>
+    <figure><img src="figures/footprint.png" alt="footprint"><figcaption><b>横轴</b>：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br><b>竖轴</b>：体积(GB)<br><b>结果</b>：INT4 比 INT8 约省 42%<br><b>分析</b>：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存</figcaption></figure>
   </div>
   <table>
     <tr><th>指标（Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN, batch=1）</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
@@ -114,7 +116,7 @@ footer a{color:var(--accent)}
   <p style="font-size:12.5px;color:var(--muted)">上下文/批处理 sweep（INT4）：prefill inputLen 128→1024 吞吐 1485→1720（1024 趋稳），batch1 已算力饱和；decode pastKVLen 128→4000（涨 31×）仅掉 9%。多模态图像路径（视觉塔+deepstack+INT4 LLM）端到端验证正确。</p>
 
   <h3>1.2 精度：量化掉点（vs FP16 基线）</h3>
-  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><strong>横轴</strong>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)。<strong>竖轴</strong>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数。<strong>结果</strong>：INT4(AWQ) 掉点 +9.8% 显著小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久。<strong>分析</strong>：INT4 是 W4A16 纯权重量化、激活保 16bit，对校准集域错配更鲁棒；INT8 W8A8 连激活也量化更敏感 → 掉点更大。结合性能，本负载下 INT4 decode 既更快又更保真。</figcaption></figure>
+  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><b>横轴</b>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)<br><b>竖轴</b>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数<br><b>结果</b>：INT4(AWQ) 掉点 +9.8% 显著小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久<br><b>分析</b>：INT4(W4A16 纯权重、激活保 16bit)对校准集域错配更鲁棒；INT8(W8A8)连激活也量化更敏感 → 掉点更大。结合性能，本负载下 INT4 既更快又更保真</figcaption></figure>
   <table>
     <tr><th>指标</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
     <tr><td>平均 perplexity（越低越好）</td><td>1.237</td><td class="win">1.359</td><td>1.460</td></tr>
@@ -123,6 +125,30 @@ footer a{color:var(--accent)}
   </table>
 
   <h2>二、方法细节（可复现）</h2>
+
+  <h3>2.1 方法总览（端到端流程 · 为什么这么设计）</h3>
+<pre class="flow">
+ nvidia/Cosmos-Reason2-8B   (HF 门控 · fp16 预训练权重)
+         │  下载
+         ▼
+ ☁ 云端 Kaggle T4×2  ──ModelOpt PTQ 量化──►  边缘 ONNX (LLM + fp16 视觉塔)
+      · AWQ(W4A16) / SmoothQuant(W8A8)
+      · 校准集: cnn_dailymail 512 篇
+         │  scp   (Orin 无外网: 云 → 本地 → Orin)
+         ▼
+ 🖥 Jetson Orin  ──TensorRT-Edge-LLM llm_build──►  TRT 引擎 (INT4/INT8/FP16, sm_87 专用)
+         │
+         ▼
+ 推理 llm_inference / llm_bench   +   tegrastats 采功耗
+         │
+         ▼
+ 评测 ├─ 性能: 延迟 / 吞吐 / 显存 / 功耗 / 能效
+      └─ 精度: vs FP16 参考 perplexity + token 一致率
+</pre>
+  <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
+  <p><strong>为什么这么设计</strong>：① 8B（16GB）本地 3070（8GB）装不下、Orin 无外网 → 量化这类<strong>一次性重活放免费云 T4×2</strong>；② 以 <strong>ONNX 作跨平台中间表示</strong>，云端导出与边缘建引擎解耦、可复用；③ TensorRT 引擎按 GPU 架构（sm_87）特化，<strong>必须在目标设备本地构建</strong>；④ 生成式 VLM 无标注任务集 → 精度用 <strong>FP16 参考的相对退化</strong>（perplexity/一致率），与性能轴分离评测。</p>
+
+  <h3>2.2 方法细节（配置与口径）</h3>
   <ul>
     <li><strong>模型 / 权重</strong>：<a href="https://huggingface.co/nvidia/Cosmos-Reason2-8B" target="_blank" style="color:var(--accent)"><code>nvidia/Cosmos-Reason2-8B</code></a>（HuggingFace 门控，NVIDIA 预训练；我们<strong>只做推理量化，不训练/微调</strong>；revision 未 pin）。实测架构：36 层 · hidden 4096 · GQA 32/8 头 · RoPE 262144 · vocab 151936（Qwen2.5-VL 系 8B backbone）。</li>
     <li><strong>量化</strong>：NVIDIA ModelOpt 训练后量化(PTQ)。INT4 = AWQ(W4A16)、INT8 = SmoothQuant(W8A8)。<strong>校准集 = 工具默认的 <a href="https://huggingface.co/datasets/cnn_dailymail" target="_blank" style="color:var(--accent)">CNN/DailyMail 3.0.0</a> 前 512 篇 `article`（新闻文本、纯文本路径、非驾驶域</strong>——见讨论 caveat）。视觉塔未量化（保 fp16）。</li>

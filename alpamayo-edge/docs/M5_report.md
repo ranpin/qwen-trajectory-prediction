@@ -12,19 +12,19 @@
 ## 一、核心结果
 
 ![throughput](figures/bench_throughput.png)
-> **横轴**：Prefill(512 token 输入) / Decode(每 token) 两阶段。**竖轴**：吞吐(tokens/秒)。**结果**：prefill INT8 快 1.9×；decode INT4 快 1.57×。**分析**：prefill 计算密集→INT8 原生张量核占优；decode 访存密集(每步搬全部权重)→INT4 权重小更快 → 交互式选 INT4、批量选 INT8。
+> **横轴**：Prefill(512 token 输入) / Decode(每 token) 两阶段<br>**竖轴**：吞吐(tokens/秒)<br>**结果**：prefill INT8 快 1.9×；decode INT4 快 1.57×<br>**分析**：prefill 计算密集→INT8 原生张量核占优；decode 访存密集(每步搬全部权重)→INT4 权重小更快 ⇒ 交互式选 INT4、批量选 INT8
 
 ![power & energy](figures/bench_power_energy.png)
-> **横轴**：Prefill / Decode 两阶段（两子图同）。**竖轴**：左=整机功耗(瓦，三电轨之和)，右=能效(tokens/焦耳，对数轴)。**结果**：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×。**分析**：能效=吞吐÷功耗，各阶段吞吐赢家功耗还不劣；边缘设备电/热受限，能效常比绝对速度更关键。
+> **横轴**：Prefill / Decode 两阶段（两子图同）<br>**竖轴**：左=整机功耗(瓦，三电轨之和)，右=能效(tokens/焦耳，对数轴)<br>**结果**：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×<br>**分析**：能效=吞吐÷功耗，各阶段吞吐赢家功耗还不劣；边缘设备电/热受限，能效常比绝对速度更关键
 
 ![decode scaling](figures/decode_scaling.png)
-> **横轴**：上下文长度(past-KV token 数，128→4000)。**竖轴**：INT4 decode 吞吐(tokens/秒)。**结果**：上下文涨 31× 吞吐仅降 9%。**分析**：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 → 适合长对话/长文档。
+> **横轴**：上下文长度(past-KV token 数，128→4000)<br>**竖轴**：INT4 decode 吞吐(tokens/秒)<br>**结果**：上下文涨 31× 吞吐仅降 9%<br>**分析**：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 ⇒ 适合长对话/长文档
 
 ![footprint](figures/footprint.png)
-> **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)。**竖轴**：体积(GB)。**结果**：INT4 比 INT8 约省 42%。**分析**：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存。
+> **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br>**竖轴**：体积(GB)<br>**结果**：INT4 比 INT8 约省 42%<br>**分析**：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存
 
 ![accuracy drop-off](figures/accuracy_dropoff.png)
-> **横轴**：左=平均 perplexity，右=与 FP16 的一致性(一致前缀占比 % / 长度 token)。**竖轴**：左=perplexity(越低越贴近 FP16，虚线=FP16 基线 1.237)，右=百分比 / token 数。**结果**：INT4 掉点 +9.8% 小于 INT8 +18.1%。**分析**：INT4(W4A16 纯权重、激活留 16bit)对校准域错配更鲁棒，INT8(W8A8)连激活量化更敏感 → 掉点更大；本负载 INT4 既快又保真。
+> **横轴**：左=平均 perplexity，右=与 FP16 的一致性(一致前缀占比 % / 长度 token)<br>**竖轴**：左=perplexity(越低越贴近 FP16，虚线=FP16 基线 1.237)，右=百分比 / token 数<br>**结果**：INT4 掉点 +9.8% 小于 INT8 +18.1%<br>**分析**：INT4(W4A16 纯权重、激活留 16bit)对校准域错配更鲁棒，INT8(W8A8)连激活量化更敏感 → 掉点更大；本负载 INT4 既快又保真
 
 | 场景 | 选 | 理由（实测） |
 |---|---|---|
@@ -34,6 +34,31 @@
 （环境：Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN；batch=1，prefill 512 tok，decode pastKV=512。sweep：decode 上下文涨 31× 仅掉 9%；多模态图像路径端到端验证正确。）
 
 ## 二、方法细节（可复现）
+
+### 2.1 方法总览（端到端流程 · 为什么这么设计）
+
+```
+ nvidia/Cosmos-Reason2-8B   (HF 门控 · fp16 预训练权重)
+         │  下载
+         ▼
+ ☁ 云端 Kaggle T4×2  ──ModelOpt PTQ 量化──►  边缘 ONNX (LLM + fp16 视觉塔)
+      · AWQ(W4A16) / SmoothQuant(W8A8)   · 校准集: cnn_dailymail 512 篇
+         │  scp   (Orin 无外网: 云 → 本地 → Orin)
+         ▼
+ 🖥 Jetson Orin  ──TensorRT-Edge-LLM llm_build──►  TRT 引擎 (INT4/INT8/FP16, sm_87 专用)
+         │
+         ▼
+ 推理 llm_inference / llm_bench   +   tegrastats 采功耗
+         │
+         ▼
+ 评测 ├─ 性能: 延迟 / 吞吐 / 显存 / 功耗 / 能效
+      └─ 精度: vs FP16 参考 perplexity + token 一致率
+```
+
+**描述**：预训练权重在云端一次性量化并导出 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。
+**为什么这么设计**：① 8B(16GB)本地 3070(8GB)装不下、Orin 无外网 → 量化这类一次性重活放免费云 T4×2；② 以 ONNX 作跨平台中间表示，云端导出与边缘建引擎解耦；③ TensorRT 引擎按 GPU 架构(sm_87)特化，必须在目标设备本地构建；④ 生成式 VLM 无标注任务集 → 精度用 FP16 参考的相对退化，与性能轴分离。
+
+### 2.2 方法细节（配置与口径）
 
 - **模型/权重**：`nvidia/Cosmos-Reason2-8B`（HF 门控，NVIDIA 预训练；**只量化不训练**）。36 层·hidden 4096·GQA 32/8·RoPE 262144·vocab 151936。
 - **量化**：ModelOpt PTQ。INT4=AWQ(W4A16)、INT8=SmoothQuant(W8A8)。**校准集 = 默认 512 篇 CNN/DailyMail 新闻文本（非驾驶域，重要 caveat）**；视觉塔未量化保 fp16。
