@@ -79,6 +79,15 @@ footer a{color:var(--accent)}
   </table>
   <p>实测两例即其本职：喂海滩图 → 准确描述场景；问"湿路为何刹车距离变长" → 讲摩擦力下降与打滑。产出的是<strong>理解与推理</strong>，不是路点坐标。</p>
 
+  <h2>模型 · 数据 · 校准 · 方法（可复现）</h2>
+  <ul>
+    <li><strong>模型 / 权重</strong>：<code>nvidia/Cosmos-Reason2-8B</code>（HuggingFace 门控，NVIDIA 预训练；我们<strong>只做推理量化，不训练/微调</strong>）。实测架构：36 层 · hidden 4096 · GQA 32/8 头 · RoPE 上下文 262144 · vocab 151936（Qwen2.5-VL 系 8B backbone）。</li>
+    <li><strong>量化</strong>：NVIDIA ModelOpt 训练后量化(PTQ)。INT4 = AWQ(W4A16)、INT8 = SmoothQuant(W8A8)。<strong>校准集 = 工具默认的 512 篇 CNN/DailyMail 新闻文本</strong>（纯文本路径，<strong>非驾驶域</strong>）——重要 caveat：域错配可能放大掉点，且对"连激活也量化"的 INT8 更不利。视觉塔未量化（保 fp16）。</li>
+    <li><strong>数据</strong>：精度评测用 <strong>12 条手写</strong>驾驶/推理 prompt（<strong>无标注、非标准 benchmark</strong>）；性能用 llm_bench 合成序列。<strong>无带标注的下游任务正确率</strong>。</li>
+    <li><strong>指标</strong>：延迟/吞吐 = llm_bench E2E（mean±std，warmup 3 + iter 10）；功耗 = tegrastats 三轨之和；能效 = tok/s ÷ W；掉点 = FP16 模型对输出的 teacher-forced perplexity + token 一致率（相对退化口径，非纯量化误差）。数字已复现。</li>
+  </ul>
+  <p style="font-size:13px;color:var(--muted)">完整方法、命令与可复现细节见 <a href="https://github.com/ranpin/qwen-trajectory-prediction/blob/alpamayo-edge/alpamayo-edge/docs/METHODOLOGY.md" target="_blank" style="color:var(--accent)">docs/METHODOLOGY.md</a>。</p>
+
   <h2>核心结果</h2>
   <p style="font-size:13px;color:var(--muted);margin-top:-2px">📊 图表可<strong class="zoom" style="color:var(--accent)">点击放大</strong>（再点任意处或按 Esc 还原）。不熟悉指标可先展开下面的说明。</p>
   <details class="gloss">
@@ -130,7 +139,7 @@ footer a{color:var(--accent)}
   </table>
   <div class="callout">
     <div class="t">发现：INT4 既更快（decode）又更保真</div>
-    AWQ 是激活感知的纯权重 4bit（W4A16），保留输出分布更好；INT8 SmoothQuant 为 W8A8、连激活也量化，本推理负载上对分布扰动更大。<strong>诚实口径</strong>：该 PPL 是对模型自身贪心输出的相对打分（绝对值偏低，看增幅），且对比的是已部署 TRT 引擎 vs FP16 PyTorch，捕获的是"量化+引擎+后端"的总部署差距，非纯量化误差。
+    AWQ 是激活感知的纯权重 4bit（W4A16），保留输出分布更好；INT8 SmoothQuant 为 W8A8、连激活也量化，对<strong>校准集域错配</strong>（此处校准用新闻文本、部署是驾驶推理）更敏感——这是 INT8 掉点更大的<strong>合理主因之一（机制明确，但未做消融证明）</strong>。可验证的后续：用驾驶域校准集重量化再比。<strong>诚实口径</strong>：该 PPL 是对模型自身贪心输出的相对打分（绝对值偏低，看增幅），且对比的是已部署 TRT 引擎 vs FP16 PyTorch，为"量化+引擎+后端"的总部署差距，非纯量化误差。
   </div>
 
   <h2>最硬的工程亮点：定位并修复 FMHA 崩溃</h2>

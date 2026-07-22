@@ -1,7 +1,8 @@
 # M5 — 项目总结报告（可展示版）
 
 > 一页看懂：做了什么、拿到什么数、能用来干什么。详细指标见 [edge_deploy_status.md](edge_deploy_status.md)，
-> 工程细节见 [orin_build_notes.md](orin_build_notes.md)，目标对照见 [plan.md](plan.md)。
+> 工程细节见 [orin_build_notes.md](orin_build_notes.md)，目标对照见 [plan.md](plan.md)，
+> **模型/数据/指标定义/校准集及影响见 [METHODOLOGY.md](METHODOLOGY.md)**。
 
 ## 做了什么
 

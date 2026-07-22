@@ -2,6 +2,7 @@
 
 > Cosmos-Reason2-8B 从云端量化到 Jetson Orin 端到端推理跑通的**结果与指标**。
 > 构建配方、踩坑、FMHA 根因等工程细节见 [orin_build_notes.md](orin_build_notes.md)；计划/里程碑见 [plan.md](plan.md)。
+> **模型来源 / 数据集 / 指标定义与测法 / 校准集及影响** 见 [METHODOLOGY.md](METHODOLOGY.md)（可复现口径）。
 > 更新日期：2026-07-22。
 
 ## 一句话结论
@@ -70,7 +71,9 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 
 补齐"精度轴"：FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（Orin 无外网、8B fp16≈16GB 本地装不下，故走云端一次性），对**同一批 12 条固定 prompt**（驾驶物理推理+决策+常识，贪心 `top_k=1` 确定性）产出：产物与复现脚本见 [`eval/accuracy/`](../eval/accuracy/)。
 
-**方法**：Orin 上 INT4/INT8 引擎贪心生成实际输出 → 用 FP16 模型对每段输出做 **teacher-forced perplexity** 打分（"原始模型对量化输出有多惊讶"，PPL 越低=越贴近 FP16 分布）；并统计与 FP16 贪心输出的 **token 一致前缀**。
+**方法**：Orin 上 INT4/INT8 引擎贪心生成实际输出 → 用 FP16 模型对每段输出做 **teacher-forced perplexity** 打分（"原始模型对量化输出有多惊讶"，PPL 越低=越贴近 FP16 分布）；并统计与 FP16 贪心输出的 **token 一致前缀**。完整定义见 [METHODOLOGY.md](METHODOLOGY.md) §3.3。
+
+> **量化校准集（重要）**：两版均为 NVIDIA ModelOpt PTQ，校准用**工具默认的 512 篇 CNN/DailyMail 新闻文本**（纯文本，**非驾驶域**；INT4=AWQ W4A16、INT8=SmoothQuant W8A8；视觉塔未量化保 fp16）。域错配可能放大掉点、且对连激活也量化的 INT8 更不利——**是 INT8 掉点更大的合理主因之一（机制明确、未做消融）**。详见 [METHODOLOGY.md](METHODOLOGY.md) §4。
 
 | 指标 | FP16 参考 | INT4 (AWQ) | INT8 (SmoothQuant) |
 |---|---|---|---|
