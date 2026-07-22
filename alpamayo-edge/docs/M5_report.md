@@ -1,63 +1,45 @@
-# M5 — 项目总结报告（可展示版）
+# M5 — 项目总结报告（论文式 · 可展示版）
 
-> 一页看懂：做了什么、拿到什么数、能用来干什么。详细指标见 [edge_deploy_status.md](edge_deploy_status.md)，
-> 工程细节见 [orin_build_notes.md](orin_build_notes.md)，目标对照见 [plan.md](plan.md)，
-> **模型/数据/指标定义/校准集及影响见 [METHODOLOGY.md](METHODOLOGY.md)**。
+> 结构：摘要 → 核心结果 → 方法细节（可复现）→ 思考讨论。
+> 详细指标 [edge_deploy_status.md](edge_deploy_status.md)｜方法与校准 [METHODOLOGY.md](METHODOLOGY.md)｜**问题记录（含 FMHA 根因）[PROBLEMS.md](PROBLEMS.md)**｜目标对照 [plan.md](plan.md)。
 
-## 做了什么
+## 摘要
 
-把 NVIDIA **Cosmos-Reason2-8B**（自动驾驶物理场景推理多模态大模型）用 **TensorRT-Edge-LLM**
-量化为 **INT4 (AWQ)** 与 **INT8 (SmoothQuant)**，部署到 **Jetson Orin (sm_87)**，端到端跑通
-**引擎构建 → 加载 → prefill → decode → 真实文本/图像推理**，并测出完整的延迟/吞吐/显存/功耗/能效画像。
+把 NVIDIA **Cosmos-Reason2-8B**（自动驾驶物理场景推理多模态大模型，属"感知+推理/可解释"层，**不是**轨迹预测器）用 **TensorRT-Edge-LLM** 量化为 **INT4 (AWQ)** 与 **INT8 (SmoothQuant)**，部署到 **Jetson Orin (sm_87)**，端到端跑通引擎构建→加载→prefill→decode→真实文本/图像推理，测出延迟/吞吐/显存/功耗/能效完整画像 + 用 FP16 参考量化掉点。**核心结论：decode 看 INT4、prefill 看 INT8；INT4 在本工作负载既更快（decode 1.57×）又更保真（掉点 +9.8% vs INT8 +18.1%）。** 零预算 · 零训练 · 全 Orin。
 
-- **输入**：图像/视频帧 + 文字问题（如"这个驾驶场景里有什么、危不危险"）。
-- **输出**：文字推理（场景描述、风险判断、行动建议）——**不是轨迹路点**（那是 VLA/Alpamayo 的活）。
-- 定位：AV 栈里的**"感知+推理/可解释"层的边缘部署**，不是路径规划层。
+- **输入**：图像/视频帧 + 文字问题；**输出**：文字推理（场景描述/风险判断/行动建议），非轨迹路点。
 
-## 核心结果
+## 一、核心结果
 
 ![throughput](figures/bench_throughput.png)
-
 ![power & energy](figures/bench_power_energy.png)
-
 ![decode scaling](figures/decode_scaling.png)
-
 ![footprint](figures/footprint.png)
-
 ![accuracy drop-off](figures/accuracy_dropoff.png)
 
-**选型结论**：**decode 看 INT4、prefill 看 INT8**——两者在不同阶段各自既更快又更省电；且精度上 **INT4(AWQ) 掉点更小**（vs FP16 perplexity +9.8% vs INT8 +18.1%）。
-
-| 场景 | 选 | 理由 |
+| 场景 | 选 | 理由（实测） |
 |---|---|---|
-| 交互式 / 单流低延迟 / 省电 / 精度敏感 | **INT4** | decode 吞吐高 57%、能效高 64%、显存省 42%，掉点更小（+9.8%） |
-| 批量 / 长上下文 / 高吞吐 | **INT8** | prefill 快 1.9×、能效高 2.3×、功耗更低（精度略逊，+18.1%） |
+| 交互式 / 单流低延迟 / 省电 / 精度敏感 | **INT4** | decode 30.9 tok/s（高 57%）、能效 0.82 tok/J（高 64%）、显存 ~4.6GB（省 42%）、掉点 +9.8% |
+| 批量 / 长上下文 / 高吞吐 | **INT8** | prefill 3252 tok/s（快 1.9×）、能效 62.8 tok/J（高 2.3×）、功耗更低（掉点 +18.1%） |
 
-（环境：Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN；batch=1，prefill 512 tok，decode pastKV=512。）
+（环境：Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN；batch=1，prefill 512 tok，decode pastKV=512。sweep：decode 上下文涨 31× 仅掉 9%；多模态图像路径端到端验证正确。）
 
-## 最硬的工程亮点：定位并修复 FMHA 崩溃
+## 二、方法细节（可复现）
 
-推理一进 attention 就 `There must be one kernel to implement the MHA` 崩溃。通过**读崩溃点源码 →
-插桩打印运行时 kernel hashKey → 查编译宏 → 追到 CMake 默认分支**，定位真根因：**当初 Orin 构建
-漏传 `-DEMBEDDED_TARGET=jetson-orin`，导致 CMake 按 sm_80;86;89 编译并 `-DEXCLUDE_SM_87` 把
-sm_87 的 FMHA kernel 整段编译排除**。不是架构缺 cubin、不是模型、不是量化问题——是构建配置失误。
-按官方 Orin 配方重编即通。（完整链路见 [orin_build_notes.md](orin_build_notes.md)。）
+- **模型/权重**：`nvidia/Cosmos-Reason2-8B`（HF 门控，NVIDIA 预训练；**只量化不训练**）。36 层·hidden 4096·GQA 32/8·RoPE 262144·vocab 151936。
+- **量化**：ModelOpt PTQ。INT4=AWQ(W4A16)、INT8=SmoothQuant(W8A8)。**校准集 = 默认 512 篇 CNN/DailyMail 新闻文本（非驾驶域，重要 caveat）**；视觉塔未量化保 fp16。
+- **数据**：精度 = 12 条手写 prompt（无标注、非 benchmark）；性能 = llm_bench 合成序列。
+- **指标**：延迟/吞吐 = llm_bench E2E（mean±std, warmup3+iter10）；功耗 = tegrastats 三轨和；能效 = tok/s÷W；掉点 = FP16 模型 teacher-forced perplexity + token 一致率。
+- 完整定义、命令、校准影响分析见 **[METHODOLOGY.md](METHODOLOGY.md)**。
 
-## 能用来干什么
+## 三、思考讨论
 
-1. **可复用的边缘量化部署方法论**：同一套流程可把任意 TRTEdge 支持的 LLM/VLM（Qwen-VL、其他 Cosmos）
-   量化部署到任意 Jetson，并给出量化选型依据。已沉淀为 skill `edge-quantize-deploy`。
-2. **一个可实时查询的车载场景推理系统**：喂驾驶图像 + 问题 → ~30 tok/s @ ~40W 的边缘推理。可作
-   感知理解 / 安全监控 / 可解释性模块。
-3. **一份完整的 INT4-vs-INT8 边缘权衡实证**：延迟/吞吐/显存/功耗/能效/上下文扩展性/**量化掉点** 全维度对照。
+- **为何 INT4 掉点反而更小**：AWQ 纯权重量化（激活留 16bit）对校准域错配更鲁棒；INT8 SmoothQuant 连激活也量化、更敏感——**是 INT8 掉点更大的合理主因之一（未做消融）**。可验证后续：驾驶域校准集重量化再比。
+- **能用来干什么**：① 可复用的边缘量化部署方法论（沉淀为 skill `edge-quantize-deploy`）；② 可实时查询的车载场景推理系统（~30 tok/s @ ~40W）；③ 完整 INT4-vs-INT8 边缘权衡实证。
+- **诚实的边界**：① 无轨迹预测（VLA 轨道暂缓）；② 精度为相对退化口径（"量化+引擎+后端"总差距，非纯量化误差、非任务正确率）；③ 校准集非驾驶域；④ 量化标的由 Alpamayo 改 Cosmos（Alpamayo 只支持 FP16 不能量化）。
+- 实验全过程的问题/根因/解决（含 FMHA 崩溃跨层根因）见 **[PROBLEMS.md](PROBLEMS.md)**。
 
-## 诚实的边界（未做 / 暂缓）
-
-- **无轨迹预测（AV 本职任务）**：ADE/FDE/MR vs CVM 属于 VLA 轨道（Alpamayo-R1-10B FP16），大工程，暂缓。
-- **精度轴已补齐但为相对退化口径**：有 FP16 参考下的 perplexity 掉点（INT4 +9.8% / INT8 +18.1%）与 token 一致率；该数字捕获"量化+引擎+后端"的总部署差距，非纯量化误差，也非下游任务正确率（无带标注的 AV QA 集）。详见 [edge_deploy_status.md](edge_deploy_status.md) 掉点节。
-- 量化标的从 Alpamayo 改为 Cosmos，因 **Alpamayo 只支持 FP16、不能量化**（硬约束，见 [FINDINGS.md](FINDINGS.md)）。
-
-## 简历 bullet（填实测数）
+## 简历 bullet（实测数）
 
 - 用 NVIDIA TensorRT-Edge-LLM 将 8B 多模态大模型 (Cosmos-Reason2) 量化为 INT4/INT8 并部署至 Jetson Orin，
   实测 **INT4 decode 30.9 tok/s @ ~40W (0.82 tok/J)**、**INT8 prefill 3252 tok/s (62.8 tok/J)**，

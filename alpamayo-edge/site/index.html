@@ -63,33 +63,23 @@ footer a{color:var(--accent)}
 
 <div class="wrap">
   <h1>Alpamayo-Edge：8B 多模态大模型的 Jetson Orin 量化部署实战</h1>
-  <p class="lede">把 NVIDIA <strong>Cosmos-Reason2-8B</strong>（自动驾驶物理场景推理 VLM）用 TensorRT-Edge-LLM 量化为 INT4/INT8，部署到 Jetson Orin (sm_87)，端到端跑通推理并测出完整的延迟 / 吞吐 / 显存 / 功耗 / 能效权衡。<strong>零预算 · 零训练 · 全 Orin。</strong></p>
   <div class="badges">
     <span class="badge">INT4 AWQ</span><span class="badge">INT8 SmoothQuant</span>
     <span class="badge">Jetson Orin sm_87</span><span class="badge">TensorRT-Edge-LLM</span>
     <span class="badge">端到端跑通</span>
   </div>
 
-  <h2>这个系统是什么 / 输入输出</h2>
-  <p>Cosmos-Reason2-8B 是一个<strong>物理场景推理多模态模型（VLM）</strong>，不是轨迹预测器。它是自动驾驶栈里的<strong>"感知 + 推理 / 可解释"层</strong>，不是路径规划层。</p>
+  <h2>摘要</h2>
+  <p>把 NVIDIA <strong>Cosmos-Reason2-8B</strong>（自动驾驶物理场景推理 VLM，非轨迹预测器，属"感知+推理/可解释"层）用 <strong>TensorRT-Edge-LLM</strong> 量化为 <strong>INT4(AWQ)</strong> 与 <strong>INT8(SmoothQuant)</strong>，部署到 <strong>Jetson Orin (sm_87)</strong>，端到端跑通推理，并测出延迟/吞吐/显存/功耗/能效完整画像 + 用 FP16 参考量化掉点。<strong>核心结论：decode 看 INT4、prefill 看 INT8；INT4 在本工作负载既更快（decode 快 1.57×）又更保真（掉点 +9.8% vs INT8 +18.1%）。</strong>零预算 · 零训练 · 全 Orin。</p>
   <table class="io-table">
     <tr><th>组件</th><th>输入</th><th>输出</th></tr>
     <tr><td><strong>Cosmos-Reason2（本项目部署）</strong></td><td>图像 / 视频帧 + 文字问题</td><td><strong>文字推理</strong>：场景描述、风险判断、行动建议</td></tr>
     <tr><td>Alpamayo-R1 VLA（暂缓轨道）</td><td>多相机图像 + 轨迹历史</td><td>轨迹（6.4s / 64 路点）</td></tr>
   </table>
-  <p>实测两例即其本职：喂海滩图 → 准确描述场景；问"湿路为何刹车距离变长" → 讲摩擦力下降与打滑。产出的是<strong>理解与推理</strong>，不是路点坐标。</p>
+  <p style="font-size:13px;color:var(--muted)">实验过程中的问题、根因与解决（含 FMHA 崩溃根因等）单独归档于 <a href="https://github.com/ranpin/qwen-trajectory-prediction/blob/alpamayo-edge/alpamayo-edge/docs/PROBLEMS.md" target="_blank" style="color:var(--accent)">问题记录 PROBLEMS.md</a>，本页不含。</p>
 
-  <h2>模型 · 数据 · 校准 · 方法（可复现）</h2>
-  <ul>
-    <li><strong>模型 / 权重</strong>：<code>nvidia/Cosmos-Reason2-8B</code>（HuggingFace 门控，NVIDIA 预训练；我们<strong>只做推理量化，不训练/微调</strong>）。实测架构：36 层 · hidden 4096 · GQA 32/8 头 · RoPE 上下文 262144 · vocab 151936（Qwen2.5-VL 系 8B backbone）。</li>
-    <li><strong>量化</strong>：NVIDIA ModelOpt 训练后量化(PTQ)。INT4 = AWQ(W4A16)、INT8 = SmoothQuant(W8A8)。<strong>校准集 = 工具默认的 512 篇 CNN/DailyMail 新闻文本</strong>（纯文本路径，<strong>非驾驶域</strong>）——重要 caveat：域错配可能放大掉点，且对"连激活也量化"的 INT8 更不利。视觉塔未量化（保 fp16）。</li>
-    <li><strong>数据</strong>：精度评测用 <strong>12 条手写</strong>驾驶/推理 prompt（<strong>无标注、非标准 benchmark</strong>）；性能用 llm_bench 合成序列。<strong>无带标注的下游任务正确率</strong>。</li>
-    <li><strong>指标</strong>：延迟/吞吐 = llm_bench E2E（mean±std，warmup 3 + iter 10）；功耗 = tegrastats 三轨之和；能效 = tok/s ÷ W；掉点 = FP16 模型对输出的 teacher-forced perplexity + token 一致率（相对退化口径，非纯量化误差）。数字已复现。</li>
-  </ul>
-  <p style="font-size:13px;color:var(--muted)">完整方法、命令与可复现细节见 <a href="https://github.com/ranpin/qwen-trajectory-prediction/blob/alpamayo-edge/alpamayo-edge/docs/METHODOLOGY.md" target="_blank" style="color:var(--accent)">docs/METHODOLOGY.md</a>。</p>
-
-  <h2>核心结果</h2>
-  <p style="font-size:13px;color:var(--muted);margin-top:-2px">📊 图表可<strong class="zoom" style="color:var(--accent)">点击放大</strong>（再点任意处或按 Esc 还原）。不熟悉指标可先展开下面的说明。</p>
+  <h2>一、核心结果</h2>
+  <p style="font-size:13px;color:var(--muted);margin-top:-2px">📊 图表可<strong class="zoom" style="color:var(--accent)">点击放大</strong>（再点任意处或按 Esc 还原）。不熟悉指标可先展开下面的说明，或见「方法细节」。</p>
   <details class="gloss">
     <summary>▸ 指标怎么读（点开）</summary>
     <table>
@@ -104,16 +94,16 @@ footer a{color:var(--accent)}
       <tr><td>MAXN · sm_87</td><td>MAXN = Orin 最高性能功耗模式；sm_87 = Orin GPU 的 CUDA 架构代号（Ampere）。</td></tr>
     </table>
   </details>
+
+  <h3>1.1 性能：延迟 / 吞吐 / 显存 / 功耗 / 能效</h3>
   <div class="grid2">
     <figure><img src="figures/bench_throughput.png" alt="throughput"><figcaption>吞吐：prefill 计算密集 → INT8 快 1.9×；decode 访存密集 → INT4 快 1.57×</figcaption></figure>
     <figure><img src="figures/bench_power_energy.png" alt="power & energy"><figcaption>功耗与能效：INT8 prefill 能效高 2.3×，INT4 decode 能效高 1.64×</figcaption></figure>
     <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption>INT4 decode 上下文涨 31× 仅慢 9%，长上下文扩展性好</figcaption></figure>
     <figure><img src="figures/footprint.png" alt="footprint"><figcaption>体积：INT4 约省 42%，从容装进 Orin 29GB 统一内存</figcaption></figure>
   </div>
-
-  <h3>性能指标（Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN，batch=1）</h3>
   <table>
-    <tr><th>指标</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
+    <tr><th>指标（Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN, batch=1）</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
     <tr><td>Prefill 512 tok</td><td>300.98 ms / 1701 tok·s⁻¹</td><td class="win">157.45 ms / 3252 tok·s⁻¹</td></tr>
     <tr><td>Decode 每 token</td><td class="win">32.34 ms / 30.9 tok·s⁻¹</td><td>50.65 ms / 19.7 tok·s⁻¹</td></tr>
     <tr><td>Prefill 能效</td><td>27.5 tok/J</td><td class="win">62.8 tok/J</td></tr>
@@ -121,15 +111,9 @@ footer a{color:var(--accent)}
     <tr><td>引擎载入显存</td><td class="win">~4.6 GB</td><td>~7.9 GB</td></tr>
     <tr><td>真实生成</td><td>✅ 连贯正确</td><td>✅ 连贯正确</td></tr>
   </table>
+  <p style="font-size:12.5px;color:var(--muted)">上下文/批处理 sweep（INT4）：prefill inputLen 128→1024 吞吐 1485→1720（1024 趋稳），batch1 已算力饱和；decode pastKVLen 128→4000（涨 31×）仅掉 9%。多模态图像路径（视觉塔+deepstack+INT4 LLM）端到端验证正确。</p>
 
-  <div class="callout ok">
-    <div class="t">选型结论：decode 看 INT4，prefill 看 INT8</div>
-    交互式 / 单流低延迟 / 省电 → <strong>INT4</strong>（decode 吞吐高 57%、能效高 64%、显存省 42%）；
-    批量 / 长上下文 / 高吞吐 → <strong>INT8</strong>（prefill 快 1.9×、能效高 2.3×、功耗更低）。两者在不同阶段各自既更快又更省电。
-  </div>
-
-  <h2>量化掉点（vs FP16 基线）</h2>
-  <p>Orin 无外网、8B fp16≈16GB 本地装不下，故在 <strong>Kaggle T4×2</strong> 用 PyTorch 加载 FP16 原模型做一次性参考。对同一批 12 条固定 prompt（驾驶物理推理+决策+常识，贪心确定性），用 FP16 模型对 INT4/INT8 的<strong>实际输出</strong>做 teacher-forced perplexity 打分（"原模型对量化输出有多惊讶"）。</p>
+  <h3>1.2 精度：量化掉点（vs FP16 基线）</h3>
   <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption>量化掉点：INT4(AWQ) 的 perplexity 增幅（+9.8%）显著小于 INT8(SmoothQuant)（+18.1%），贪心路径也跟随 FP16 更久</figcaption></figure>
   <table>
     <tr><th>指标</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
@@ -137,36 +121,43 @@ footer a{color:var(--accent)}
     <tr><td>PPL 相对 FP16 增幅</td><td>—</td><td class="win">+9.8%</td><td>+18.1%</td></tr>
     <tr><td>与 FP16 贪心一致前缀占比</td><td>100%</td><td class="win">16.4%</td><td>5.7%</td></tr>
   </table>
+
+  <h2>二、方法细节（可复现）</h2>
+  <ul>
+    <li><strong>模型 / 权重</strong>：<code>nvidia/Cosmos-Reason2-8B</code>（HuggingFace 门控，NVIDIA 预训练；我们<strong>只做推理量化，不训练/微调</strong>）。实测架构：36 层 · hidden 4096 · GQA 32/8 头 · RoPE 上下文 262144 · vocab 151936（Qwen2.5-VL 系 8B backbone）。</li>
+    <li><strong>量化</strong>：NVIDIA ModelOpt 训练后量化(PTQ)。INT4 = AWQ(W4A16)、INT8 = SmoothQuant(W8A8)。<strong>校准集 = 工具默认的 512 篇 CNN/DailyMail 新闻文本</strong>（纯文本路径，<strong>非驾驶域</strong>——见「思考讨论」的 caveat）。视觉塔未量化（保 fp16）。</li>
+    <li><strong>数据</strong>：精度评测用 <strong>12 条手写</strong>驾驶/推理 prompt（<strong>无标注、非标准 benchmark</strong>）；性能用 llm_bench 合成序列。<strong>无带标注的下游任务正确率</strong>。</li>
+    <li><strong>指标</strong>：延迟/吞吐 = llm_bench E2E（mean±std，warmup 3 + iter 10；prefill inputLen=512、decode pastKVLen=512）；功耗 = tegrastats 三轨之和；能效 = tok/s ÷ W；掉点 = FP16 模型对输出的 teacher-forced perplexity + token 一致率（相对退化口径，非纯量化误差）。INT4 已重跑复现（在 run-to-run 噪声内一致）。</li>
+  </ul>
+  <p style="font-size:13px;color:var(--muted)">模型来源、数据集、指标定义与测法、校准集及影响的完整可复现细节见 <a href="https://github.com/ranpin/qwen-trajectory-prediction/blob/alpamayo-edge/alpamayo-edge/docs/METHODOLOGY.md" target="_blank" style="color:var(--accent)">docs/METHODOLOGY.md</a>。</p>
+
+  <h2>三、思考讨论</h2>
+  <div class="callout ok">
+    <div class="t">选型结论：decode 看 INT4，prefill 看 INT8</div>
+    交互式 / 单流低延迟 / 省电 / 精度敏感 → <strong>INT4</strong>（decode 吞吐高 57%、能效高 64%、显存省 42%，掉点更小）；
+    批量 / 长上下文 / 高吞吐 → <strong>INT8</strong>（prefill 快 1.9×、能效高 2.3×、功耗更低）。两者在不同阶段各自既更快又更省电。
+  </div>
   <div class="callout">
-    <div class="t">发现：INT4 既更快（decode）又更保真</div>
-    AWQ 是激活感知的纯权重 4bit（W4A16），保留输出分布更好；INT8 SmoothQuant 为 W8A8、连激活也量化，对<strong>校准集域错配</strong>（此处校准用新闻文本、部署是驾驶推理）更敏感——这是 INT8 掉点更大的<strong>合理主因之一（机制明确，但未做消融证明）</strong>。可验证的后续：用驾驶域校准集重量化再比。<strong>诚实口径</strong>：该 PPL 是对模型自身贪心输出的相对打分（绝对值偏低，看增幅），且对比的是已部署 TRT 引擎 vs FP16 PyTorch，为"量化+引擎+后端"的总部署差距，非纯量化误差。
+    <div class="t">为何 INT4 掉点反而更小？—— 校准域错配的合理推断</div>
+    AWQ 是激活感知的纯权重 4bit（W4A16），激活保持 16bit，对<strong>校准集域错配</strong>（此处校准用新闻文本、部署是驾驶推理）更鲁棒；INT8 SmoothQuant 为 W8A8、<strong>连激活也量化</strong>，对校准质量/域错配更敏感——这是 INT8 掉点更大（+18.1% vs +9.8%）的<strong>合理主因之一（机制明确，但未做消融证明）</strong>。可验证的后续：用驾驶域校准集重量化再比。<strong>口径</strong>：PPL 是对贪心输出的相对打分（看增幅），对比的是已部署 TRT 引擎 vs FP16 PyTorch，为"量化+引擎+后端"的总部署差距。
   </div>
-
-  <h2>最硬的工程亮点：定位并修复 FMHA 崩溃</h2>
-  <p>推理一进 attention 就 <code>There must be one kernel to implement the MHA</code> 崩溃。通过<strong>读崩溃点源码 → 插桩打印运行时 kernel hashKey → 查编译宏 → 追到 CMake 默认分支</strong>，定位真根因：</p>
-  <div class="callout warn">
-    <div class="t">根因 = 构建配置失误（非架构缺陷 / 非模型 / 非量化）</div>
-    当初在 Orin 构建 TensorRT-Edge-LLM <strong>漏传 <code>-DEMBEDDED_TARGET=jetson-orin</code></strong>，CMake 走默认分支按 <code>sm_80;86;89</code> 编译，并用 <code>-DEXCLUDE_SM_87</code> 把 sm_87 的 FMHA kernel <strong>整段编译排除</strong>——插件靠 compute_80 PTX 前向 JIT 才勉强加载，但运行时任何 attention 查表必落空。按官方 Orin 配方重编即通。
-  </div>
-  <p>这是一次非平凡的<strong>跨层排查</strong>：运行时 kernel 派发表 ↔ 预编译 cubin ↔ 编译宏 ↔ CMake 逻辑。</p>
-
-  <h2>能用来干什么</h2>
+  <h3>能用来干什么</h3>
   <ul>
     <li><strong>可复用的边缘量化部署方法论</strong>——同套流程可把任意 TRTEdge 支持的 LLM/VLM 部署到任意 Jetson，并给出量化选型依据。</li>
     <li><strong>可实时查询的车载场景推理系统</strong>——喂驾驶图像 + 问题，~30 tok/s @ ~40W 的边缘推理，可作感知理解 / 安全监控 / 可解释模块。</li>
-    <li><strong>完整的 INT4-vs-INT8 边缘权衡实证</strong>——延迟 / 吞吐 / 显存 / 功耗 / 能效 / 上下文扩展性全维度。</li>
+    <li><strong>完整的 INT4-vs-INT8 边缘权衡实证</strong>——延迟 / 吞吐 / 显存 / 功耗 / 能效 / 上下文扩展性 / 掉点全维度。</li>
   </ul>
-
-  <h2>诚实的边界</h2>
+  <h3>诚实的边界</h3>
   <ul>
     <li><strong>无轨迹预测</strong>：ADE/FDE vs CVM 属于 VLA 轨道（Alpamayo-R1-10B FP16），大工程，暂缓。</li>
     <li><strong>精度轴为相对退化口径</strong>：有 FP16 参考下的掉点数字，但为"量化+引擎+后端"的总部署差距，非纯量化误差，也非带标注的下游任务正确率。</li>
+    <li><strong>校准集为通用新闻文本、非驾驶域</strong>：可能放大掉点；驾驶域校准的对比属未做的消融。</li>
     <li>量化标的从 Alpamayo 改为 Cosmos，因 Alpamayo 只支持 FP16、不能量化（工具硬约束）。</li>
   </ul>
 
   <footer>
-    源码与完整文档：<a href="https://github.com/ranpin/qwen-trajectory-prediction/tree/alpamayo-edge/alpamayo-edge" target="_blank">github.com/ranpin/qwen-trajectory-prediction</a>
-    · 结果报告 <code>docs/edge_deploy_status.md</code> · 工程日志 <code>docs/orin_build_notes.md</code>
+    源码与完整文档：<a href="https://github.com/ranpin/qwen-trajectory-prediction/tree/alpamayo-edge/alpamayo-edge" target="_blank">github.com/ranpin/qwen-trajectory-prediction</a><br>
+    结果报告 <code>docs/edge_deploy_status.md</code> · 方法与可复现 <code>docs/METHODOLOGY.md</code> · 问题记录 <code>docs/PROBLEMS.md</code> · 工程日志 <code>docs/orin_build_notes.md</code>
   </footer>
 </div>
 
