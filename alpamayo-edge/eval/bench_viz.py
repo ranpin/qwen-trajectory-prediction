@@ -116,4 +116,31 @@ ax.set_title("Cosmos-Reason1-Benchmark robovqa (n=110 MC, ground-truth)\n"
              fontweight="bold", fontsize=11)
 fig.tight_layout(); fig.savefig(os.path.join(OUT, "benchmark_accuracy.png")); plt.close(fig)
 
+# ---- Fig 7: standardized serving metrics (TTFT vs input length; E2E breakdown) ----
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.3))
+# left: TTFT (=prefill) vs input length. INT4 sweep measured; INT8 has 512 point.
+inlen = [128, 256, 512, 1024]
+ttft4 = [86, 157, 301, 595]   # INT4: inputLen/prefill-TPS *1000 (from measured sweep)
+a1.plot(inlen, ttft4, "-o", color=C4, lw=2, ms=6, label="INT4 (AWQ)")
+a1.plot([512], [157.45], "s", color=C8, ms=9, label="INT8 @512")
+for x, y in zip(inlen, ttft4):
+    a1.annotate(f"{y}", (x, y), xytext=(0, 7), textcoords="offset points", ha="center", fontsize=9)
+a1.set_xlabel("input length (tokens)"); a1.set_ylabel("TTFT = time-to-first-token (ms)")
+a1.set_title("TTFT vs input length", fontweight="bold"); a1.legend(fontsize=9); a1.margins(y=0.2)
+# right: E2E breakdown for a 512-in + 128-out request (stacked prefill + decode)
+labels = ["INT4 (AWQ)", "INT8 (SmoothQuant)"]
+prefill_s = [0.301, 0.157]; decode_s = [128*0.03234, 128*0.05065]
+x = np.arange(2); w = 0.5
+a2.bar(x, prefill_s, w, label="TTFT (prefill 512)", color="#93c5fd")
+a2.bar(x, decode_s, w, bottom=prefill_s, label="decode 128×TPOT", color=[C4, C8])
+for i in range(2):
+    tot = prefill_s[i]+decode_s[i]
+    a2.annotate(f"{tot:.2f}s", (x[i], tot), ha="center", va="bottom", fontsize=11, fontweight="bold",
+                xytext=(0, 2), textcoords="offset points")
+a2.set_xticks(x); a2.set_xticklabels(labels); a2.set_ylabel("E2E latency (s)")
+a2.set_title("E2E (512-in + 128-out): decode dominates -> INT4 wins", fontweight="bold", fontsize=10.5)
+a2.legend(fontsize=9); a2.margins(y=0.18)
+fig.suptitle("Standardized serving metrics: TTFT / TPOT / E2E  (Orin MAXN batch=1; FP16 N/A: build OOM)", fontsize=11)
+fig.tight_layout(rect=(0,0,1,0.95)); fig.savefig(os.path.join(OUT, "serving_metrics.png")); plt.close(fig)
+
 print("wrote:", ", ".join(sorted(os.listdir(OUT))))

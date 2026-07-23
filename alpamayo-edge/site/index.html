@@ -114,6 +114,7 @@ footer a{color:var(--accent)}
     <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption><b>横轴</b>：上下文长度(past-KV token 数，128→4000)<br><b>竖轴</b>：INT4 decode 吞吐 TPS (tokens/s)<br><b>结果</b>：上下文涨 31× 吞吐仅降 9%<br><b>分析</b>：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 ⇒ 适合长对话/长文档</figcaption></figure>
     <figure><img src="figures/footprint.png" alt="footprint"><figcaption><b>横轴</b>：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br><b>竖轴</b>：体积(GB)<br><b>结果</b>：INT4 比 INT8 约省 42%<br><b>分析</b>：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存</figcaption></figure>
   </div>
+  <figure><img src="figures/serving_metrics.png" alt="serving metrics TTFT/E2E"><figcaption><b>横轴</b>：左=输入长度(token)，右=两种精度<br><b>竖轴</b>：左=TTFT 首 token 延迟(ms)，右=E2E 端到端延迟(s，堆叠=prefill+decode)<br><b>结果</b>：TTFT 随输入近线性增(INT4 128→1024tok：86→595ms)；512-in+128-out 的 E2E，INT4 4.44s < INT8 6.64s<br><b>分析</b>：短输出/长输入看 TTFT(INT8 prefill 快)，但生成越长 decode(TPOT) 越主导 → INT4 的 E2E 反而更优；FP16 因 OOM 无设备端数据</figcaption></figure>
   <table>
     <tr><th>标准服务指标（Orin sm_87 / JetPack 6.2 / CUDA 12.6 / TRT 10.7 / MAXN, batch=1）</th><th>FP16</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
     <tr><td><b>TTFT</b> 首 token 延迟（512-token 输入 prefill）</td><td>✗</td><td>300.98 ms</td><td class="win">157.45 ms</td></tr>

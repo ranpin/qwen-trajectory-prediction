@@ -23,6 +23,9 @@
 ![footprint](figures/footprint.png)
 > **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br>**竖轴**：体积(GB)<br>**结果**：INT4 比 INT8 约省 42%<br>**分析**：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存
 
+![serving metrics](figures/serving_metrics.png)
+> **横轴**：左=输入长度(token)，右=精度<br>**竖轴**：左=TTFT(ms)，右=E2E(s，prefill+decode 堆叠)<br>**结果**：TTFT 随输入近线性(INT4 86→595ms@128→1024)；512-in+128-out E2E INT4 4.44s < INT8 6.64s<br>**分析**：生成越长 decode(TPOT) 越主导 → INT4 的 E2E 更优；FP16 因 OOM 无设备端数据
+
 ![benchmark accuracy](figures/benchmark_accuracy.png)
 > **横轴**：三种精度(FP16/INT8/INT4)<br>**竖轴**：真实基准 MC 任务正确率 %(绿虚线=FP16 88.2%)<br>**结果**：FP16 88.2%、INT8/INT4 均 87.3%（−0.9 pts，误差棒=Wilson 95%CI）<br>**分析**：CI 大幅重叠、McNemar p=1.0 → 差异**统计不显著**(n=110)，稳妥结论=**量化无显著任务正确率损失**。**另:FP16 引擎在 Orin build 期 OOM(16GB>29GB)→ 量化是部署必需**。
 
