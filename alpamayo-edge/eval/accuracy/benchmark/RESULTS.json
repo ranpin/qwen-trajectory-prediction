@@ -1,0 +1,17 @@
+{
+  "benchmark": "nvidia/Cosmos-Reason1-Benchmark (robovqa)",
+  "format": "multiple-choice, ground-truth",
+  "n": 110,
+  "frames_per_video": 6,
+  "frame_max_side": 448,
+  "note": "K=6 frames resized<=448px fed as multi-image; same frames on FP16(cloud PyTorch) and Orin INT4/INT8 -> drop-off valid",
+  "accuracy": {
+    "fp16": 0.8818,
+    "int8": 0.8727,
+    "int4": 0.8727
+  },
+  "dropoff_pts_vs_fp16": {
+    "int8": -0.9,
+    "int4": -0.9
+  }
+}

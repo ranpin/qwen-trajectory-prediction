@@ -96,4 +96,21 @@ fig.suptitle("Quantization drop-off vs FP16 (12 driving/reasoning prompts, greed
 fig.tight_layout(rect=(0, 0, 1, 0.96))
 fig.savefig(os.path.join(OUT, "accuracy_dropoff.png")); plt.close(fig)
 
+# ---- Fig 6: task accuracy on official benchmark (Cosmos-Reason1 robovqa, MC) ----
+fig, ax = plt.subplots(figsize=(7, 4.2))
+labels = ["FP16\n(ref)", "INT8\n(SmoothQuant)", "INT4\n(AWQ)"]
+accs = [88.2, 87.3, 87.3]
+colors = ["#16a34a", C8, C4]
+b = ax.bar(labels, accs, color=colors, width=0.6)
+for r, a in zip(b, accs):
+    ax.annotate(f"{a}%", (r.get_x()+r.get_width()/2, a), ha="center", va="bottom",
+                fontsize=11, fontweight="bold", xytext=(0, 2), textcoords="offset points")
+ax.set_ylabel("multiple-choice accuracy (%)")
+ax.set_ylim(60, 100)
+ax.axhline(88.2, color="#16a34a", lw=1.2, ls="--", alpha=0.6)
+ax.set_title("Cosmos-Reason1-Benchmark robovqa (110 MC, ground-truth)\n"
+             "Quantization keeps ~99% of FP16 accuracy: only -0.9 pts",
+             fontweight="bold", fontsize=11.5)
+fig.tight_layout(); fig.savefig(os.path.join(OUT, "benchmark_accuracy.png")); plt.close(fig)
+
 print("wrote:", ", ".join(sorted(os.listdir(OUT))))

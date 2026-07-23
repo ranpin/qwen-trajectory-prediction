@@ -73,11 +73,12 @@ footer a{color:var(--accent)}
   </div>
 
   <h2>摘要</h2>
-  <p>把 NVIDIA <strong>Cosmos-Reason2-8B</strong>（自动驾驶物理场景推理 VLM，非轨迹预测器，属"感知 + 推理 / 可解释"层）用 <strong>TensorRT-Edge-LLM</strong> 量化为 <strong>INT4 (AWQ)</strong> 与 <strong>INT8 (SmoothQuant)</strong>，部署到 <strong>Jetson Orin (sm_87)</strong> 端到端跑通推理，并测出吞吐 (TPS) / 延迟 / 显存 (VRAM) / 功耗 / 能效完整画像，再用 FP16 参考量化掉点。<span style="color:var(--muted)">零预算 · 零训练 · 全 Orin。</span></p>
+  <p>把 NVIDIA <strong>Cosmos-Reason2-8B</strong>（物理场景推理 VLM，非轨迹预测器，属"感知 + 推理 / 可解释"层）用 <strong>TensorRT-Edge-LLM</strong> 量化为 <strong>INT4 (AWQ)</strong> 与 <strong>INT8 (SmoothQuant)</strong>，部署到 <strong>Jetson Orin (sm_87)</strong> 端到端跑通推理；按标准服务指标（TTFT / TPOT / TPS / E2E）测性能功耗，并在<strong>官方 Cosmos-Reason1-Benchmark（带标准答案）</strong>实测量化对<strong>任务正确率</strong>的影响。<span style="color:var(--muted)">零预算 · 零训练 · 全 Orin。</span></p>
   <p style="margin-bottom:4px"><strong>核心结论：</strong></p>
   <ol style="margin-top:0">
-    <li><strong>decode 看 INT4、prefill 看 INT8</strong>——两阶段各有最优精度/性能档位。</li>
-    <li>INT4 在本工作负载<strong>既更快</strong>（decode 快 1.57×）<strong>又更保真</strong>（掉点 +9.8% vs INT8 +18.1%）、且<strong>更省显存</strong>（−42%）。</li>
+    <li><strong>量化是落地必需</strong>：FP16 引擎（~16GB）在 Orin 上 build 期 <strong>OOM 装不下</strong>；INT4(4.6GB)/INT8(7.9GB) 才能部署。</li>
+    <li><strong>量化几乎不掉正确率</strong>：真实基准上 INT4/INT8 仅 <strong>−0.9 个百分点</strong>（88.2%→87.3%，保留 ~99% FP16 任务正确率）。</li>
+    <li><strong>选型：decode 看 INT4、prefill 看 INT8</strong>——INT4 decode 快 1.57×/更省电/更省显存(−42%)，INT8 prefill 快 1.9×/能效高 2.3×；生成越长 INT4 的 E2E 越占优。</li>
   </ol>
   <table class="io-table">
     <tr><th>组件</th><th>输入</th><th>输出</th></tr>
@@ -94,7 +95,9 @@ footer a{color:var(--accent)}
       <tr><td>Prefill 预填充</td><td>一次性并行"读完"输入 prompt 的所有 token（读题阶段）。计算密集，看整体处理速度。</td></tr>
       <tr><td>Decode 解码</td><td>逐个 token 自回归生成输出（答题阶段），每步只出 1 个 token。访存密集——每步都要把权重从显存搬一遍，权重越小越快。</td></tr>
       <tr><td>TPS (tokens/s)</td><td>吞吐 = 每秒处理/生成的 token 数，越高越好。本文性能主指标。</td></tr>
-      <tr><td>ITL 单 token 延迟</td><td>Inter-Token Latency，decode 阶段生成每个 token 的耗时（ms），越低越流畅；TPS ≈ 1000 / ITL。</td></tr>
+      <tr><td>TTFT 首 token 延迟</td><td>Time To First Token，从请求到吐出第一个 token 的时间 ≈ 输入 prompt 的 prefill 耗时；随输入变长而增大。交互式体验的关键。</td></tr>
+      <tr><td>TPOT / ITL 每 token 延迟</td><td>Time Per Output Token（= Inter-Token Latency），decode 阶段生成每个 token 的耗时（ms），越低越流畅；输出 TPS ≈ 1000 / TPOT。</td></tr>
+      <tr><td>E2E 端到端延迟</td><td>一次完整请求耗时 = TTFT + 输出token数 × TPOT。生成越长，decode(TPOT) 越主导。</td></tr>
       <tr><td>tokens/J 能效</td><td>每焦耳能量处理的 token 数（= TPS ÷ 功耗 W）。越高越省电，是电池/散热受限的边缘设备的关键指标。</td></tr>
       <tr><td>VRAM 显存</td><td>引擎加载后占用的显存。Orin 是 CPU/GPU 共享的 29 GB "统一内存"。</td></tr>
       <tr><td>perplexity 困惑度</td><td>模型对一段文本的"意外程度"，越低=越符合模型预期。这里用 FP16 原模型给量化输出打分，<strong>增幅越小 = 量化越保真</strong>。</td></tr>
@@ -112,14 +115,18 @@ footer a{color:var(--accent)}
     <figure><img src="figures/footprint.png" alt="footprint"><figcaption><b>横轴</b>：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br><b>竖轴</b>：体积(GB)<br><b>结果</b>：INT4 比 INT8 约省 42%<br><b>分析</b>：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存</figcaption></figure>
   </div>
   <table>
-    <tr><th>指标（Orin sm_87 / JetPack 6.2 / CUDA 12.6 / TRT 10.7 / MAXN, batch=1）</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
-    <tr><td>Prefill 延迟 / 吞吐（512 tok）</td><td>300.98 ms / 1701 TPS</td><td class="win">157.45 ms / 3252 TPS</td></tr>
-    <tr><td>Decode ITL / 吞吐（单 token）</td><td class="win">32.34 ms / 30.9 TPS</td><td>50.65 ms / 19.7 TPS</td></tr>
-    <tr><td>Prefill 能效</td><td>27.5 tokens/J</td><td class="win">62.8 tokens/J</td></tr>
-    <tr><td>Decode 能效</td><td class="win">0.82 tokens/J</td><td>0.50 tokens/J</td></tr>
-    <tr><td>引擎载入显存 (VRAM)</td><td class="win">~4.6 GB</td><td>~7.9 GB</td></tr>
-    <tr><td>真实生成质量</td><td>✅ 连贯正确</td><td>✅ 连贯正确</td></tr>
+    <tr><th>标准服务指标（Orin sm_87 / JetPack 6.2 / CUDA 12.6 / TRT 10.7 / MAXN, batch=1）</th><th>FP16</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
+    <tr><td><b>TTFT</b> 首 token 延迟（512-token 输入 prefill）</td><td>✗</td><td>300.98 ms</td><td class="win">157.45 ms</td></tr>
+    <tr><td><b>TPOT / ITL</b> 每输出 token 延迟（decode@pastKV512）</td><td>✗</td><td class="win">32.34 ms</td><td>50.65 ms</td></tr>
+    <tr><td><b>输出 TPS</b>（decode 吞吐）</td><td>✗</td><td class="win">30.9</td><td>19.7</td></tr>
+    <tr><td><b>Prefill 吞吐</b></td><td>✗</td><td>1701 TPS</td><td class="win">3252 TPS</td></tr>
+    <tr><td><b>E2E 延迟</b>（512-in + 128-out = TTFT + 128·TPOT）</td><td>✗</td><td class="win">≈ 4.44 s</td><td>≈ 6.64 s</td></tr>
+    <tr><td>能效 prefill / decode（tokens·J⁻¹）</td><td>✗</td><td>27.5 / <span class="win">0.82</span></td><td><span class="win">62.8</span> / 0.50</td></tr>
+    <tr><td>引擎显存 (VRAM)</td><td>~16 GB<br>✗ 无法部署</td><td class="win">~4.6 GB</td><td>~7.9 GB</td></tr>
   </table>
+  <div class="callout warn">
+    <div class="t">FP16 在 Orin 上无法部署（量化是必需，不只是优化）</div>
+    FP16 引擎 ~16 GB，在 29 GB 统一内存的 Orin 上 <strong>TensorRT build 阶段被 OOM 杀死（exit 137）</strong>——故 FP16 的 TTFT/TPS 无法在设备上测得。这本身是结论：<strong>该 8B 模型必须量化才能落地此边缘设备</strong>；INT4(4.6GB)/INT8(7.9GB) 则从容装下。TTFT 随输入长度变化（INT4：128/512/1024-token 输入 ≈ 86 / 301 / 595 ms）。<strong>E2E 看生成长度</strong>：输出 128 token 时 INT4（4.44s）反比 INT8（6.64s）更快——decode 主导。</div>
   <p style="font-size:13.5px;margin-bottom:2px"><strong>补充 sweep 与多模态（INT4）：</strong></p>
   <ul style="font-size:13.5px;color:var(--muted);margin-top:0">
     <li>Prefill inputLen 128→1024：吞吐 1485→1720 TPS（1024 趋稳），batch=1 已算力饱和、批处理无聚合增益。</li>
@@ -127,7 +134,18 @@ footer a{color:var(--accent)}
     <li>多模态图像路径（视觉塔 + deepstack + INT4 LLM）端到端验证正确。</li>
   </ul>
 
-  <h3>1.2 精度：量化掉点（vs FP16 基线）</h3>
+  <h3>1.2 精度：真实基准任务正确率（vs FP16）</h3>
+  <p>在<strong>官方 <a href="https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark" target="_blank" style="color:var(--accent)">Cosmos-Reason1-Benchmark</a>（robovqa 子集，110 道选择题带标准答案）</strong>上实测<strong>任务正确率</strong>——具体场景 + ground truth，效果指标有实际意义。视频按 6 帧（≤448px）采样作多图，FP16/INT8/INT4 用同一批帧，掉点严格可比。</p>
+  <figure><img src="figures/benchmark_accuracy.png" alt="benchmark task accuracy"><figcaption><b>横轴</b>：三种精度（FP16 参考 / INT8 / INT4）<br><b>竖轴</b>：多选题任务正确率 %（越高越好，绿虚线=FP16 基线 88.2%）<br><b>结果</b>：FP16 88.2%、INT8 87.3%、INT4 87.3%，量化仅掉 <strong>0.9 个百分点</strong>（与 FP16 预测一致率 91.8%）<br><b>分析</b>：在真实具身推理基准上，INT4/INT8 保留 ~99% 的 FP16 任务正确率 → 量化对下游正确率影响极小，边缘部署代价可接受</figcaption></figure>
+  <table>
+    <tr><th>Cosmos-Reason1-Benchmark robovqa（110 MC）</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
+    <tr><td>任务正确率（越高越好）</td><td>88.2%</td><td class="win">87.3%</td><td class="win">87.3%</td></tr>
+    <tr><td>相对 FP16 掉点</td><td>—</td><td class="win">−0.9 pts</td><td class="win">−0.9 pts</td></tr>
+    <tr><td>与 FP16 预测一致率</td><td>100%</td><td>91.8%</td><td>91.8%</td></tr>
+  </table>
+
+  <h3>1.3 精度（辅助）：细粒度 perplexity 探针</h3>
+  <p style="font-size:13.5px;color:var(--muted)">补充一个更细粒度的相对指标：12 条驾驶/推理 prompt 上，用 FP16 模型对量化输出做 teacher-forced perplexity（比 MC 正确率更敏感，能区分 INT4/INT8）。</p>
   <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><b>横轴</b>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)<br><b>竖轴</b>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数<br><b>结果</b>：INT4(AWQ) 掉点 +9.8% 显著小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久<br><b>分析</b>：INT4(W4A16 纯权重、激活保 16bit)对校准集域错配更鲁棒；INT8(W8A8)连激活也量化更敏感 → 掉点更大。结合性能，本负载下 INT4 既更快又更保真</figcaption></figure>
   <table>
     <tr><th>指标</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
@@ -153,7 +171,7 @@ footer a{color:var(--accent)}
   <ul>
     <li><strong>模型 / 权重</strong>：<a href="https://huggingface.co/nvidia/Cosmos-Reason2-8B" target="_blank" style="color:var(--accent)"><code>nvidia/Cosmos-Reason2-8B</code></a>（HuggingFace 门控，NVIDIA 预训练；我们<strong>只做推理量化，不训练/微调</strong>；revision 未 pin）。实测架构：36 层 · hidden 4096 · GQA 32/8 头 · RoPE 262144 · vocab 151936（Qwen2.5-VL 系 8B backbone）。</li>
     <li><strong>量化</strong>：NVIDIA ModelOpt 训练后量化(PTQ)。INT4 = AWQ(W4A16)、INT8 = SmoothQuant(W8A8)。<strong>校准集 = 工具默认的 <a href="https://huggingface.co/datasets/cnn_dailymail" target="_blank" style="color:var(--accent)">CNN/DailyMail 3.0.0</a> 前 512 篇 `article`（新闻文本、纯文本路径、非驾驶域</strong>——见讨论 caveat）。视觉塔未量化（保 fp16）。</li>
-    <li><strong>数据</strong>：精度评测用 <strong>12 条手写</strong>驾驶/推理 prompt（<strong>无标注、非标准 benchmark</strong>）；性能用 llm_bench 合成序列。<strong>无带标注的下游任务正确率</strong>。</li>
+    <li><strong>数据</strong>：精度评测用<strong>官方 <a href="https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark" target="_blank" style="color:var(--accent)">Cosmos-Reason1-Benchmark</a>（robovqa，110 道选择题带标准答案）</strong>——视频采 6 帧(≤448px)作多图、三种精度同帧、算 MC 任务正确率+掉点；另有 12 条手写 prompt 的 perplexity 作细粒度辅助。性能用 llm_bench 合成序列。</li>
     <li><strong>设备 / 框架（实测版本）</strong>：<strong>Jetson AGX Orin Developer Kit</strong>（sm_87，统一内存 29GB，MAXN）· L4T R36.4.4 (JetPack 6.2) · CUDA 12.6.11 · TensorRT 10.7.0.23 · <strong>TensorRT-Edge-LLM v0.9.0</strong>@<code>1ac0f2b</code>。云端量化/参考：Kaggle 2× Tesla T4 (sm_75)。</li>
     <li><strong>指标</strong>：延迟/吞吐 = llm_bench E2E（mean±std，warmup 3 + iter 10；prefill inputLen=512、decode pastKVLen=512）；功耗 = tegrastats 三轨之和；能效 = TPS ÷ W；掉点 = FP16 模型对输出的 teacher-forced perplexity + token 一致率（相对退化口径，非纯量化误差）。INT4 已重跑复现（在 run-to-run 噪声内一致）。</li>
   </ul>
@@ -162,15 +180,15 @@ footer a{color:var(--accent)}
   <h2>三、思考讨论</h2>
   <div class="callout ok">
     <div class="t">选型结论：decode 看 INT4，prefill 看 INT8</div>
-    ① 交互式 / 单流低延迟 / 省电 / 精度敏感 → <strong>INT4</strong>：decode 吞吐高 57%、能效高 64%、显存省 42%、掉点更小。<br>
+    ① 交互式 / 单流低延迟 / 省电 → <strong>INT4</strong>：decode 吞吐高 57%、能效高 64%、显存省 42%；任务正确率与 INT8 持平、perplexity 略优。<br>
     ② 批量 / 长上下文 / 高吞吐 → <strong>INT8</strong>：prefill 快 1.9×、能效高 2.3×、功耗更低。<br>
     <span style="color:var(--muted)">两者在各自阶段既更快又更省电，按场景选档即可。</span>
   </div>
   <div class="callout">
-    <div class="t">为何 INT4 掉点反而更小？—— 校准域错配的合理推断</div>
-    ① <strong>机制</strong>：INT4 是 AWQ（W4A16）纯权重量化、激活保 16bit，对<strong>校准集域错配</strong>（此处校准用新闻文本、部署是驾驶推理）更鲁棒；INT8 SmoothQuant（W8A8）<strong>连激活也量化</strong>，对校准质量更敏感 → 掉点更大（+18.1% vs +9.8%）。<br>
-    ② <strong>证据强度</strong>：机制明确，但<strong>未做消融证明</strong>；可验证的后续 = 用驾驶域校准集重量化再比。<br>
-    ③ <strong>口径</strong>：PPL 是对贪心输出的相对打分（看增幅），对比的是已部署 TRT 引擎 vs FP16 PyTorch，为"量化 + 引擎 + 后端"的总部署差距。
+    <div class="t">量化对精度影响很小 —— 两个指标的互补观察</div>
+    ① <strong>任务正确率（粗粒度、主指标）</strong>：真实基准上 INT4 与 INT8 <strong>打平</strong>（均 −0.9 pts），说明二者在下游"答对与否"层面都几乎无损。<br>
+    ② <strong>perplexity（细粒度、辅助）</strong>：更敏感，能区分出 <strong>INT4 略优于 INT8</strong>（+9.8% vs +18.1%）。合理机制：INT4 为 AWQ(W4A16) 纯权重量化、激活保 16bit，对<strong>校准集域错配</strong>（校准用新闻文本）更鲁棒；INT8 SmoothQuant(W8A8) 连激活也量化、更敏感——<strong>机制明确但未做消融</strong>。<br>
+    ③ <strong>口径</strong>：MC 正确率对比标准答案；perplexity 是已部署 TRT 引擎输出 vs FP16 的相对打分（"量化+引擎+后端"总差距）。
   </div>
   <h3>能用来干什么</h3>
   <ul>
@@ -180,9 +198,10 @@ footer a{color:var(--accent)}
   </ul>
   <h3>诚实的边界</h3>
   <ul>
+    <li><strong>基准范围</strong>：任务正确率仅在 Cosmos-Reason1-Benchmark 的 <strong>robovqa 子集（110 题，具身机器人推理，非驾驶）</strong>上测；其余子集/官方 AV 子集未跑（AV 子集官方尚未发布）。视频按 6 帧@448 采样（非官方原生视频协议），故绝对分不追求复现论文，<strong>但 FP16/INT8/INT4 同帧 → 掉点严格可比</strong>。</li>
+    <li><strong>FP16 无设备端性能基线</strong>：FP16 引擎在 Orin build 期 OOM（16GB &gt; 显存余量），故无法给出 Orin 上的 FP16 TTFT/TPS；"量化 vs FP16 加速比"以显存可行性（FP16 装不下）替代呈现。</li>
     <li><strong>无轨迹预测</strong>：ADE/FDE vs CVM 属于 VLA 轨道（Alpamayo-R1-10B FP16），大工程，暂缓。</li>
-    <li><strong>精度轴为相对退化口径</strong>：有 FP16 参考下的掉点数字，但为"量化+引擎+后端"的总部署差距，非纯量化误差，也非带标注的下游任务正确率。</li>
-    <li><strong>校准集为通用新闻文本、非驾驶域</strong>：可能放大掉点；驾驶域校准的对比属未做的消融。</li>
+    <li><strong>校准集为通用新闻文本、非驾驶域</strong>：可能放大掉点；域内校准对比属未做的消融。</li>
     <li>量化标的从 Alpamayo 改为 Cosmos，因 Alpamayo 只支持 FP16、不能量化（工具硬约束）。</li>
   </ul>
 

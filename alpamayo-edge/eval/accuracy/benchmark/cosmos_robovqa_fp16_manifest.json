@@ -1,0 +1,2217 @@
+{
+  "summary": {
+    "model": "nvidia/Cosmos-Reason2-8B",
+    "K": 6,
+    "subsets": {
+      "robovqa": {
+        "correct": 97,
+        "total": 110,
+        "acc": 0.8818181818181818
+      }
+    },
+    "overall_fp16_acc": 0.8818181818181818,
+    "n": 110
+  },
+  "manifest": [
+    {
+      "subset": "robovqa",
+      "idx": 0,
+      "question": "The agent in the video was given the instruction - put toy from the basket on the countertop. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_0_0.jpg",
+        "robovqa_0_1.jpg",
+        "robovqa_0_2.jpg",
+        "robovqa_0_3.jpg",
+        "robovqa_0_4.jpg",
+        "robovqa_0_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 1,
+      "question": "The agent in the video was given the instruction - put the orange in the bowl. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_1_0.jpg",
+        "robovqa_1_1.jpg",
+        "robovqa_1_2.jpg",
+        "robovqa_1_3.jpg",
+        "robovqa_1_4.jpg",
+        "robovqa_1_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 2,
+      "question": "The agent in the video was given the instruction - place the packets from the basket on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_2_0.jpg",
+        "robovqa_2_1.jpg",
+        "robovqa_2_2.jpg",
+        "robovqa_2_3.jpg",
+        "robovqa_2_4.jpg",
+        "robovqa_2_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 3,
+      "question": "The agent in the video was given the instruction - move the cart near to the table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_3_0.jpg",
+        "robovqa_3_1.jpg",
+        "robovqa_3_2.jpg",
+        "robovqa_3_3.jpg",
+        "robovqa_3_4.jpg",
+        "robovqa_3_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 4,
+      "question": "The agent in the video was given the instruction - drop orange into bowl. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_4_0.jpg",
+        "robovqa_4_1.jpg",
+        "robovqa_4_2.jpg",
+        "robovqa_4_3.jpg",
+        "robovqa_4_4.jpg",
+        "robovqa_4_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 5,
+      "question": "The agent in the video was given the instruction - close the drawer. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_5_0.jpg",
+        "robovqa_5_1.jpg",
+        "robovqa_5_2.jpg",
+        "robovqa_5_3.jpg",
+        "robovqa_5_4.jpg",
+        "robovqa_5_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 6,
+      "question": "The agent in the video was given the instruction - put book on the table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_6_0.jpg",
+        "robovqa_6_1.jpg",
+        "robovqa_6_2.jpg",
+        "robovqa_6_3.jpg",
+        "robovqa_6_4.jpg",
+        "robovqa_6_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 7,
+      "question": "The agent in the video was given the instruction - place the green apple in the bowl. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_7_0.jpg",
+        "robovqa_7_1.jpg",
+        "robovqa_7_2.jpg",
+        "robovqa_7_3.jpg",
+        "robovqa_7_4.jpg",
+        "robovqa_7_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 8,
+      "question": "The agent in the video was given the instruction - place the grapes in the bowl. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_8_0.jpg",
+        "robovqa_8_1.jpg",
+        "robovqa_8_2.jpg",
+        "robovqa_8_3.jpg",
+        "robovqa_8_4.jpg",
+        "robovqa_8_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 9,
+      "question": "The agent in the video was given the instruction - put the nacho packet in the tray. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_9_0.jpg",
+        "robovqa_9_1.jpg",
+        "robovqa_9_2.jpg",
+        "robovqa_9_3.jpg",
+        "robovqa_9_4.jpg",
+        "robovqa_9_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 10,
+      "question": "The agent in the video was given the instruction - put the blue marker in the drawer. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_10_0.jpg",
+        "robovqa_10_1.jpg",
+        "robovqa_10_2.jpg",
+        "robovqa_10_3.jpg",
+        "robovqa_10_4.jpg",
+        "robovqa_10_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 11,
+      "question": "The agent in the video was given the instruction - put the blue black can in the tray. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_11_0.jpg",
+        "robovqa_11_1.jpg",
+        "robovqa_11_2.jpg",
+        "robovqa_11_3.jpg",
+        "robovqa_11_4.jpg",
+        "robovqa_11_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 12,
+      "question": "The agent in the video was given the instruction - drop the pen into the pen holder. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_12_0.jpg",
+        "robovqa_12_1.jpg",
+        "robovqa_12_2.jpg",
+        "robovqa_12_3.jpg",
+        "robovqa_12_4.jpg",
+        "robovqa_12_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 13,
+      "question": "The agent in the video was given the instruction - open the drawer. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_13_0.jpg",
+        "robovqa_13_1.jpg",
+        "robovqa_13_2.jpg",
+        "robovqa_13_3.jpg",
+        "robovqa_13_4.jpg",
+        "robovqa_13_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 14,
+      "question": "The agent in the video was given the instruction - put the black packet in the bowl. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_14_0.jpg",
+        "robovqa_14_1.jpg",
+        "robovqa_14_2.jpg",
+        "robovqa_14_3.jpg",
+        "robovqa_14_4.jpg",
+        "robovqa_14_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 15,
+      "question": "The agent in the video was given the instruction - put the lid in the dustbin. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_15_0.jpg",
+        "robovqa_15_1.jpg",
+        "robovqa_15_2.jpg",
+        "robovqa_15_3.jpg",
+        "robovqa_15_4.jpg",
+        "robovqa_15_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 16,
+      "question": "The agent in the video was given the instruction - put the can on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_16_0.jpg",
+        "robovqa_16_1.jpg",
+        "robovqa_16_2.jpg",
+        "robovqa_16_3.jpg",
+        "robovqa_16_4.jpg",
+        "robovqa_16_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 17,
+      "question": "The agent in the video was given the instruction - stack the lid on top of existing stack. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_17_0.jpg",
+        "robovqa_17_1.jpg",
+        "robovqa_17_2.jpg",
+        "robovqa_17_3.jpg",
+        "robovqa_17_4.jpg",
+        "robovqa_17_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 18,
+      "question": "The agent in the video was given the instruction - put the pip corn packet in the tray. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_18_0.jpg",
+        "robovqa_18_1.jpg",
+        "robovqa_18_2.jpg",
+        "robovqa_18_3.jpg",
+        "robovqa_18_4.jpg",
+        "robovqa_18_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 19,
+      "question": "The agent in the video was given the instruction - place the gray  towel on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_19_0.jpg",
+        "robovqa_19_1.jpg",
+        "robovqa_19_2.jpg",
+        "robovqa_19_3.jpg",
+        "robovqa_19_4.jpg",
+        "robovqa_19_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 20,
+      "question": "The agent in the video was given the instruction - put the black bag in the drawer. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_20_0.jpg",
+        "robovqa_20_1.jpg",
+        "robovqa_20_2.jpg",
+        "robovqa_20_3.jpg",
+        "robovqa_20_4.jpg",
+        "robovqa_20_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 21,
+      "question": "The agent in the video was given the instruction - place the book on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_21_0.jpg",
+        "robovqa_21_1.jpg",
+        "robovqa_21_2.jpg",
+        "robovqa_21_3.jpg",
+        "robovqa_21_4.jpg",
+        "robovqa_21_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 22,
+      "question": "The agent in the video was given the instruction - place the book on the table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_22_0.jpg",
+        "robovqa_22_1.jpg",
+        "robovqa_22_2.jpg",
+        "robovqa_22_3.jpg",
+        "robovqa_22_4.jpg",
+        "robovqa_22_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 23,
+      "question": "The agent in the video was given the instruction - pick the green object from the top left drawer. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_23_0.jpg",
+        "robovqa_23_1.jpg",
+        "robovqa_23_2.jpg",
+        "robovqa_23_3.jpg",
+        "robovqa_23_4.jpg",
+        "robovqa_23_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 24,
+      "question": "The agent in the video was given the instruction - put the all the black pens in the pen holder. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_24_0.jpg",
+        "robovqa_24_1.jpg",
+        "robovqa_24_2.jpg",
+        "robovqa_24_3.jpg",
+        "robovqa_24_4.jpg",
+        "robovqa_24_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 25,
+      "question": "The agent in the video was given the instruction - take the waist portion up. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_25_0.jpg",
+        "robovqa_25_1.jpg",
+        "robovqa_25_2.jpg",
+        "robovqa_25_3.jpg",
+        "robovqa_25_4.jpg",
+        "robovqa_25_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 26,
+      "question": "The agent in the video was given the instruction - put pear in the bowl. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_26_0.jpg",
+        "robovqa_26_1.jpg",
+        "robovqa_26_2.jpg",
+        "robovqa_26_3.jpg",
+        "robovqa_26_4.jpg",
+        "robovqa_26_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 27,
+      "question": "The agent in the video was given the instruction - put the pens into the organizer. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_27_0.jpg",
+        "robovqa_27_1.jpg",
+        "robovqa_27_2.jpg",
+        "robovqa_27_3.jpg",
+        "robovqa_27_4.jpg",
+        "robovqa_27_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 28,
+      "question": "The agent in the video was given the instruction - put the cheese stick in the cup. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_28_0.jpg",
+        "robovqa_28_1.jpg",
+        "robovqa_28_2.jpg",
+        "robovqa_28_3.jpg",
+        "robovqa_28_4.jpg",
+        "robovqa_28_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 29,
+      "question": "The agent in the video was given the instruction - place hint bottle on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_29_0.jpg",
+        "robovqa_29_1.jpg",
+        "robovqa_29_2.jpg",
+        "robovqa_29_3.jpg",
+        "robovqa_29_4.jpg",
+        "robovqa_29_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 30,
+      "question": "The agent in the video was given the instruction - pull the box out of the shelves. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_30_0.jpg",
+        "robovqa_30_1.jpg",
+        "robovqa_30_2.jpg",
+        "robovqa_30_3.jpg",
+        "robovqa_30_4.jpg",
+        "robovqa_30_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 31,
+      "question": "The agent in the video was given the instruction - put the packets from the drawer in the bowl. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_31_0.jpg",
+        "robovqa_31_1.jpg",
+        "robovqa_31_2.jpg",
+        "robovqa_31_3.jpg",
+        "robovqa_31_4.jpg",
+        "robovqa_31_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 32,
+      "question": "The agent in the video was given the instruction - put candy in cup. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_32_0.jpg",
+        "robovqa_32_1.jpg",
+        "robovqa_32_2.jpg",
+        "robovqa_32_3.jpg",
+        "robovqa_32_4.jpg",
+        "robovqa_32_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 33,
+      "question": "The agent in the video was given the instruction - place the cup inside the green dustbin. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_33_0.jpg",
+        "robovqa_33_1.jpg",
+        "robovqa_33_2.jpg",
+        "robovqa_33_3.jpg",
+        "robovqa_33_4.jpg",
+        "robovqa_33_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 34,
+      "question": "The agent in the video was given the instruction - open the drawer of the table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_34_0.jpg",
+        "robovqa_34_1.jpg",
+        "robovqa_34_2.jpg",
+        "robovqa_34_3.jpg",
+        "robovqa_34_4.jpg",
+        "robovqa_34_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 35,
+      "question": "The agent in the video was given the instruction - pick up the pen. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_35_0.jpg",
+        "robovqa_35_1.jpg",
+        "robovqa_35_2.jpg",
+        "robovqa_35_3.jpg",
+        "robovqa_35_4.jpg",
+        "robovqa_35_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 36,
+      "question": "The agent in the video was given the instruction - push the green cup to the left. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_36_0.jpg",
+        "robovqa_36_1.jpg",
+        "robovqa_36_2.jpg",
+        "robovqa_36_3.jpg",
+        "robovqa_36_4.jpg",
+        "robovqa_36_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 37,
+      "question": "The agent in the video was given the instruction - pick up stapler. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_37_0.jpg",
+        "robovqa_37_1.jpg",
+        "robovqa_37_2.jpg",
+        "robovqa_37_3.jpg",
+        "robovqa_37_4.jpg",
+        "robovqa_37_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 38,
+      "question": "The agent in the video was given the instruction - pick up the cap. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_38_0.jpg",
+        "robovqa_38_1.jpg",
+        "robovqa_38_2.jpg",
+        "robovqa_38_3.jpg",
+        "robovqa_38_4.jpg",
+        "robovqa_38_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 39,
+      "question": "The agent in the video was given the instruction - write something on the white board. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_39_0.jpg",
+        "robovqa_39_1.jpg",
+        "robovqa_39_2.jpg",
+        "robovqa_39_3.jpg",
+        "robovqa_39_4.jpg",
+        "robovqa_39_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 40,
+      "question": "The agent in the video was given the instruction - place can in the tray. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_40_0.jpg",
+        "robovqa_40_1.jpg",
+        "robovqa_40_2.jpg",
+        "robovqa_40_3.jpg",
+        "robovqa_40_4.jpg",
+        "robovqa_40_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 41,
+      "question": "The agent in the video was given the instruction - place duck toy inside the basket. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_41_0.jpg",
+        "robovqa_41_1.jpg",
+        "robovqa_41_2.jpg",
+        "robovqa_41_3.jpg",
+        "robovqa_41_4.jpg",
+        "robovqa_41_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 42,
+      "question": "The agent in the video was given the instruction - place the stand on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_42_0.jpg",
+        "robovqa_42_1.jpg",
+        "robovqa_42_2.jpg",
+        "robovqa_42_3.jpg",
+        "robovqa_42_4.jpg",
+        "robovqa_42_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 43,
+      "question": "The agent in the video was given the instruction - put packet on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_43_0.jpg",
+        "robovqa_43_1.jpg",
+        "robovqa_43_2.jpg",
+        "robovqa_43_3.jpg",
+        "robovqa_43_4.jpg",
+        "robovqa_43_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 44,
+      "question": "The agent in the video was given the instruction - pull the drawer. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_44_0.jpg",
+        "robovqa_44_1.jpg",
+        "robovqa_44_2.jpg",
+        "robovqa_44_3.jpg",
+        "robovqa_44_4.jpg",
+        "robovqa_44_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 45,
+      "question": "The agent in the video was given the instruction - put the cushion properly. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_45_0.jpg",
+        "robovqa_45_1.jpg",
+        "robovqa_45_2.jpg",
+        "robovqa_45_3.jpg",
+        "robovqa_45_4.jpg",
+        "robovqa_45_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 46,
+      "question": "The agent in the video was given the instruction - pick the pen from the table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_46_0.jpg",
+        "robovqa_46_1.jpg",
+        "robovqa_46_2.jpg",
+        "robovqa_46_3.jpg",
+        "robovqa_46_4.jpg",
+        "robovqa_46_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 47,
+      "question": "The agent in the video was given the instruction - place the packets from the woven tray on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_47_0.jpg",
+        "robovqa_47_1.jpg",
+        "robovqa_47_2.jpg",
+        "robovqa_47_3.jpg",
+        "robovqa_47_4.jpg",
+        "robovqa_47_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 48,
+      "question": "The agent in the video was given the instruction - put the tape near pen stand on the table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_48_0.jpg",
+        "robovqa_48_1.jpg",
+        "robovqa_48_2.jpg",
+        "robovqa_48_3.jpg",
+        "robovqa_48_4.jpg",
+        "robovqa_48_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 49,
+      "question": "The agent in the video was given the instruction - switch off the lamp. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_49_0.jpg",
+        "robovqa_49_1.jpg",
+        "robovqa_49_2.jpg",
+        "robovqa_49_3.jpg",
+        "robovqa_49_4.jpg",
+        "robovqa_49_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 50,
+      "question": "The agent in the video was given the instruction - put the plastic fork into the pen holder. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_50_0.jpg",
+        "robovqa_50_1.jpg",
+        "robovqa_50_2.jpg",
+        "robovqa_50_3.jpg",
+        "robovqa_50_4.jpg",
+        "robovqa_50_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 51,
+      "question": "The agent in the video was given the instruction - place the packet in the drawer. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_51_0.jpg",
+        "robovqa_51_1.jpg",
+        "robovqa_51_2.jpg",
+        "robovqa_51_3.jpg",
+        "robovqa_51_4.jpg",
+        "robovqa_51_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 52,
+      "question": "The agent in the video was given the instruction - put the spoon in the white yogurt cup. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_52_0.jpg",
+        "robovqa_52_1.jpg",
+        "robovqa_52_2.jpg",
+        "robovqa_52_3.jpg",
+        "robovqa_52_4.jpg",
+        "robovqa_52_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 53,
+      "question": "The agent in the video was given the instruction - release the paper clip. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_53_0.jpg",
+        "robovqa_53_1.jpg",
+        "robovqa_53_2.jpg",
+        "robovqa_53_3.jpg",
+        "robovqa_53_4.jpg",
+        "robovqa_53_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 54,
+      "question": "The agent in the video was given the instruction - put the sponge into the black stand. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_54_0.jpg",
+        "robovqa_54_1.jpg",
+        "robovqa_54_2.jpg",
+        "robovqa_54_3.jpg",
+        "robovqa_54_4.jpg",
+        "robovqa_54_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 55,
+      "question": "The agent in the video was given the instruction - pick up the red sponge. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_55_0.jpg",
+        "robovqa_55_1.jpg",
+        "robovqa_55_2.jpg",
+        "robovqa_55_3.jpg",
+        "robovqa_55_4.jpg",
+        "robovqa_55_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 56,
+      "question": "The agent in the video was given the instruction - pick up the red sponge. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_56_0.jpg",
+        "robovqa_56_1.jpg",
+        "robovqa_56_2.jpg",
+        "robovqa_56_3.jpg",
+        "robovqa_56_4.jpg",
+        "robovqa_56_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 57,
+      "question": "The agent in the video was given the instruction - pick up the scrub packet. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_57_0.jpg",
+        "robovqa_57_1.jpg",
+        "robovqa_57_2.jpg",
+        "robovqa_57_3.jpg",
+        "robovqa_57_4.jpg",
+        "robovqa_57_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 58,
+      "question": "The agent in the video was given the instruction - put the blue marker in the drawer. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_58_0.jpg",
+        "robovqa_58_1.jpg",
+        "robovqa_58_2.jpg",
+        "robovqa_58_3.jpg",
+        "robovqa_58_4.jpg",
+        "robovqa_58_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 59,
+      "question": "The agent in the video was given the instruction - put the bottle in the dustbin. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_59_0.jpg",
+        "robovqa_59_1.jpg",
+        "robovqa_59_2.jpg",
+        "robovqa_59_3.jpg",
+        "robovqa_59_4.jpg",
+        "robovqa_59_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 60,
+      "question": "The agent in the video was given the instruction - put holder inside the almirah. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_60_0.jpg",
+        "robovqa_60_1.jpg",
+        "robovqa_60_2.jpg",
+        "robovqa_60_3.jpg",
+        "robovqa_60_4.jpg",
+        "robovqa_60_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 61,
+      "question": "The agent in the video was given the instruction - stack the cups on top of existing stack. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_61_0.jpg",
+        "robovqa_61_1.jpg",
+        "robovqa_61_2.jpg",
+        "robovqa_61_3.jpg",
+        "robovqa_61_4.jpg",
+        "robovqa_61_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 62,
+      "question": "The agent in the video was given the instruction - drop the orange in a bowl. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_62_0.jpg",
+        "robovqa_62_1.jpg",
+        "robovqa_62_2.jpg",
+        "robovqa_62_3.jpg",
+        "robovqa_62_4.jpg",
+        "robovqa_62_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 63,
+      "question": "The agent in the video was given the instruction - place the wicker basket in the shelf. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_63_0.jpg",
+        "robovqa_63_1.jpg",
+        "robovqa_63_2.jpg",
+        "robovqa_63_3.jpg",
+        "robovqa_63_4.jpg",
+        "robovqa_63_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 64,
+      "question": "The agent in the video was given the instruction - place the wicker basket in the shelf. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_64_0.jpg",
+        "robovqa_64_1.jpg",
+        "robovqa_64_2.jpg",
+        "robovqa_64_3.jpg",
+        "robovqa_64_4.jpg",
+        "robovqa_64_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 65,
+      "question": "The agent in the video was given the instruction - place the pens into the organizer. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_65_0.jpg",
+        "robovqa_65_1.jpg",
+        "robovqa_65_2.jpg",
+        "robovqa_65_3.jpg",
+        "robovqa_65_4.jpg",
+        "robovqa_65_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 66,
+      "question": "The agent in the video was given the instruction - put the orange in the bowl. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_66_0.jpg",
+        "robovqa_66_1.jpg",
+        "robovqa_66_2.jpg",
+        "robovqa_66_3.jpg",
+        "robovqa_66_4.jpg",
+        "robovqa_66_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 67,
+      "question": "The agent in the video was given the instruction - put the orange in the bowl. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_67_0.jpg",
+        "robovqa_67_1.jpg",
+        "robovqa_67_2.jpg",
+        "robovqa_67_3.jpg",
+        "robovqa_67_4.jpg",
+        "robovqa_67_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 68,
+      "question": "The agent in the video was given the instruction - put black pen on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_68_0.jpg",
+        "robovqa_68_1.jpg",
+        "robovqa_68_2.jpg",
+        "robovqa_68_3.jpg",
+        "robovqa_68_4.jpg",
+        "robovqa_68_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 69,
+      "question": "The agent in the video was given the instruction - put apple in the bowl. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_69_0.jpg",
+        "robovqa_69_1.jpg",
+        "robovqa_69_2.jpg",
+        "robovqa_69_3.jpg",
+        "robovqa_69_4.jpg",
+        "robovqa_69_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 70,
+      "question": "The agent in the video was given the instruction - put apple in the bowl. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_70_0.jpg",
+        "robovqa_70_1.jpg",
+        "robovqa_70_2.jpg",
+        "robovqa_70_3.jpg",
+        "robovqa_70_4.jpg",
+        "robovqa_70_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 71,
+      "question": "The agent in the video was given the instruction - put the apple in the bowl. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_71_0.jpg",
+        "robovqa_71_1.jpg",
+        "robovqa_71_2.jpg",
+        "robovqa_71_3.jpg",
+        "robovqa_71_4.jpg",
+        "robovqa_71_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 72,
+      "question": "The agent in the video was given the instruction - put the packets from the tray on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_72_0.jpg",
+        "robovqa_72_1.jpg",
+        "robovqa_72_2.jpg",
+        "robovqa_72_3.jpg",
+        "robovqa_72_4.jpg",
+        "robovqa_72_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 73,
+      "question": "The agent in the video was given the instruction - place the toffee in the bowl. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_73_0.jpg",
+        "robovqa_73_1.jpg",
+        "robovqa_73_2.jpg",
+        "robovqa_73_3.jpg",
+        "robovqa_73_4.jpg",
+        "robovqa_73_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 74,
+      "question": "The agent in the video was given the instruction - put the green packet in the tray. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_74_0.jpg",
+        "robovqa_74_1.jpg",
+        "robovqa_74_2.jpg",
+        "robovqa_74_3.jpg",
+        "robovqa_74_4.jpg",
+        "robovqa_74_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 75,
+      "question": "The agent in the video was given the instruction - drop the white packet into the organizer. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_75_0.jpg",
+        "robovqa_75_1.jpg",
+        "robovqa_75_2.jpg",
+        "robovqa_75_3.jpg",
+        "robovqa_75_4.jpg",
+        "robovqa_75_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 76,
+      "question": "The agent in the video was given the instruction - put the silver packet in the box. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_76_0.jpg",
+        "robovqa_76_1.jpg",
+        "robovqa_76_2.jpg",
+        "robovqa_76_3.jpg",
+        "robovqa_76_4.jpg",
+        "robovqa_76_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 77,
+      "question": "The agent in the video was given the instruction - put the packets from the plastic tray on the table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_77_0.jpg",
+        "robovqa_77_1.jpg",
+        "robovqa_77_2.jpg",
+        "robovqa_77_3.jpg",
+        "robovqa_77_4.jpg",
+        "robovqa_77_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 78,
+      "question": "The agent in the video was given the instruction - put packet in tray. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_78_0.jpg",
+        "robovqa_78_1.jpg",
+        "robovqa_78_2.jpg",
+        "robovqa_78_3.jpg",
+        "robovqa_78_4.jpg",
+        "robovqa_78_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 79,
+      "question": "The agent in the video was given the instruction - put the brown chip bag in the basket. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_79_0.jpg",
+        "robovqa_79_1.jpg",
+        "robovqa_79_2.jpg",
+        "robovqa_79_3.jpg",
+        "robovqa_79_4.jpg",
+        "robovqa_79_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 80,
+      "question": "The agent in the video was given the instruction - close the door. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_80_0.jpg",
+        "robovqa_80_1.jpg",
+        "robovqa_80_2.jpg",
+        "robovqa_80_3.jpg",
+        "robovqa_80_4.jpg",
+        "robovqa_80_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 81,
+      "question": "The agent in the video was given the instruction - close the door. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_81_0.jpg",
+        "robovqa_81_1.jpg",
+        "robovqa_81_2.jpg",
+        "robovqa_81_3.jpg",
+        "robovqa_81_4.jpg",
+        "robovqa_81_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 82,
+      "question": "The agent in the video was given the instruction - move the packets backward on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_82_0.jpg",
+        "robovqa_82_1.jpg",
+        "robovqa_82_2.jpg",
+        "robovqa_82_3.jpg",
+        "robovqa_82_4.jpg",
+        "robovqa_82_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 83,
+      "question": "The agent in the video was given the instruction - put packet in box. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_83_0.jpg",
+        "robovqa_83_1.jpg",
+        "robovqa_83_2.jpg",
+        "robovqa_83_3.jpg",
+        "robovqa_83_4.jpg",
+        "robovqa_83_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 84,
+      "question": "The agent in the video was given the instruction - put the sugar candy in the organizer. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_84_0.jpg",
+        "robovqa_84_1.jpg",
+        "robovqa_84_2.jpg",
+        "robovqa_84_3.jpg",
+        "robovqa_84_4.jpg",
+        "robovqa_84_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 85,
+      "question": "The agent in the video was given the instruction - put pen in the holder. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_85_0.jpg",
+        "robovqa_85_1.jpg",
+        "robovqa_85_2.jpg",
+        "robovqa_85_3.jpg",
+        "robovqa_85_4.jpg",
+        "robovqa_85_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 86,
+      "question": "The agent in the video was given the instruction - move the chair forward. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_86_0.jpg",
+        "robovqa_86_1.jpg",
+        "robovqa_86_2.jpg",
+        "robovqa_86_3.jpg",
+        "robovqa_86_4.jpg",
+        "robovqa_86_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 87,
+      "question": "The agent in the video was given the instruction - move the chair forward. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_87_0.jpg",
+        "robovqa_87_1.jpg",
+        "robovqa_87_2.jpg",
+        "robovqa_87_3.jpg",
+        "robovqa_87_4.jpg",
+        "robovqa_87_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 88,
+      "question": "The agent in the video was given the instruction - erase the white board. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_88_0.jpg",
+        "robovqa_88_1.jpg",
+        "robovqa_88_2.jpg",
+        "robovqa_88_3.jpg",
+        "robovqa_88_4.jpg",
+        "robovqa_88_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 89,
+      "question": "The agent in the video was given the instruction - place pistachios in the cup. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_89_0.jpg",
+        "robovqa_89_1.jpg",
+        "robovqa_89_2.jpg",
+        "robovqa_89_3.jpg",
+        "robovqa_89_4.jpg",
+        "robovqa_89_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 90,
+      "question": "The agent in the video was given the instruction - open refrigerator. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_90_0.jpg",
+        "robovqa_90_1.jpg",
+        "robovqa_90_2.jpg",
+        "robovqa_90_3.jpg",
+        "robovqa_90_4.jpg",
+        "robovqa_90_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 91,
+      "question": "The agent in the video was given the instruction - place the apple inside the white bowl. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_91_0.jpg",
+        "robovqa_91_1.jpg",
+        "robovqa_91_2.jpg",
+        "robovqa_91_3.jpg",
+        "robovqa_91_4.jpg",
+        "robovqa_91_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 92,
+      "question": "The agent in the video was given the instruction - stack the cup on top of existing stack. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_92_0.jpg",
+        "robovqa_92_1.jpg",
+        "robovqa_92_2.jpg",
+        "robovqa_92_3.jpg",
+        "robovqa_92_4.jpg",
+        "robovqa_92_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 93,
+      "question": "The agent in the video was given the instruction - stack the remaining cups on top of existing stack. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_93_0.jpg",
+        "robovqa_93_1.jpg",
+        "robovqa_93_2.jpg",
+        "robovqa_93_3.jpg",
+        "robovqa_93_4.jpg",
+        "robovqa_93_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 94,
+      "question": "The agent in the video was given the instruction - put the brown box from the drawer on the left table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_94_0.jpg",
+        "robovqa_94_1.jpg",
+        "robovqa_94_2.jpg",
+        "robovqa_94_3.jpg",
+        "robovqa_94_4.jpg",
+        "robovqa_94_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 95,
+      "question": "The agent in the video was given the instruction - put the brown box from the drawer on the left table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_95_0.jpg",
+        "robovqa_95_1.jpg",
+        "robovqa_95_2.jpg",
+        "robovqa_95_3.jpg",
+        "robovqa_95_4.jpg",
+        "robovqa_95_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 96,
+      "question": "The agent in the video was given the instruction - put the packets from the plastic tray on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_96_0.jpg",
+        "robovqa_96_1.jpg",
+        "robovqa_96_2.jpg",
+        "robovqa_96_3.jpg",
+        "robovqa_96_4.jpg",
+        "robovqa_96_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 97,
+      "question": "The agent in the video was given the instruction - move red pen forward. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_97_0.jpg",
+        "robovqa_97_1.jpg",
+        "robovqa_97_2.jpg",
+        "robovqa_97_3.jpg",
+        "robovqa_97_4.jpg",
+        "robovqa_97_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 98,
+      "question": "The agent in the video was given the instruction - touch the pens in the pen holder. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_98_0.jpg",
+        "robovqa_98_1.jpg",
+        "robovqa_98_2.jpg",
+        "robovqa_98_3.jpg",
+        "robovqa_98_4.jpg",
+        "robovqa_98_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 99,
+      "question": "The agent in the video was given the instruction - pick up the watermelon hint bottle. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_99_0.jpg",
+        "robovqa_99_1.jpg",
+        "robovqa_99_2.jpg",
+        "robovqa_99_3.jpg",
+        "robovqa_99_4.jpg",
+        "robovqa_99_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 100,
+      "question": "The agent in the video was given the instruction - fold the hoodie from the down side. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_100_0.jpg",
+        "robovqa_100_1.jpg",
+        "robovqa_100_2.jpg",
+        "robovqa_100_3.jpg",
+        "robovqa_100_4.jpg",
+        "robovqa_100_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 101,
+      "question": "The agent in the video was given the instruction - place brown packet on the counter. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_101_0.jpg",
+        "robovqa_101_1.jpg",
+        "robovqa_101_2.jpg",
+        "robovqa_101_3.jpg",
+        "robovqa_101_4.jpg",
+        "robovqa_101_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 102,
+      "question": "The agent in the video was given the instruction - put the white bowl out of the stack. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "B",
+      "fp16_raw": "B",
+      "frames": [
+        "robovqa_102_0.jpg",
+        "robovqa_102_1.jpg",
+        "robovqa_102_2.jpg",
+        "robovqa_102_3.jpg",
+        "robovqa_102_4.jpg",
+        "robovqa_102_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 103,
+      "question": "The agent in the video was given the instruction - place the fork into the holder. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_103_0.jpg",
+        "robovqa_103_1.jpg",
+        "robovqa_103_2.jpg",
+        "robovqa_103_3.jpg",
+        "robovqa_103_4.jpg",
+        "robovqa_103_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 104,
+      "question": "The agent in the video was given the instruction - put the book in the shelf. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_104_0.jpg",
+        "robovqa_104_1.jpg",
+        "robovqa_104_2.jpg",
+        "robovqa_104_3.jpg",
+        "robovqa_104_4.jpg",
+        "robovqa_104_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 105,
+      "question": "The agent in the video was given the instruction - place the red  pens in the pen holder. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_105_0.jpg",
+        "robovqa_105_1.jpg",
+        "robovqa_105_2.jpg",
+        "robovqa_105_3.jpg",
+        "robovqa_105_4.jpg",
+        "robovqa_105_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 106,
+      "question": "The agent in the video was given the instruction - put the green fruit in bowl. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_106_0.jpg",
+        "robovqa_106_1.jpg",
+        "robovqa_106_2.jpg",
+        "robovqa_106_3.jpg",
+        "robovqa_106_4.jpg",
+        "robovqa_106_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 107,
+      "question": "The agent in the video was given the instruction - close the drawer. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "no",
+        "B": "yes"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_107_0.jpg",
+        "robovqa_107_1.jpg",
+        "robovqa_107_2.jpg",
+        "robovqa_107_3.jpg",
+        "robovqa_107_4.jpg",
+        "robovqa_107_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 108,
+      "question": "The agent in the video was given the instruction - put all the lids from the stack on the table. Was the agent successful in completing the task specified by the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "B",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_108_0.jpg",
+        "robovqa_108_1.jpg",
+        "robovqa_108_2.jpg",
+        "robovqa_108_3.jpg",
+        "robovqa_108_4.jpg",
+        "robovqa_108_5.jpg"
+      ]
+    },
+    {
+      "subset": "robovqa",
+      "idx": 109,
+      "question": "The agent in the video was given the instruction - put all the lids from the stack on the table. Is it possible for the agent to execute the task specified in the instruction?",
+      "options": {
+        "A": "yes",
+        "B": "no"
+      },
+      "answer": "A",
+      "fp16_pred": "A",
+      "fp16_raw": "A",
+      "frames": [
+        "robovqa_109_0.jpg",
+        "robovqa_109_1.jpg",
+        "robovqa_109_2.jpg",
+        "robovqa_109_3.jpg",
+        "robovqa_109_4.jpg",
+        "robovqa_109_5.jpg"
+      ]
+    }
+  ]
+}
