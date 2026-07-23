@@ -34,5 +34,14 @@
       "int4_vs_int8": 1.0
     },
     "conclusion": "No statistically significant accuracy difference (n=110, binary MC; CI ~±6pts). Quantization shows no significant task-accuracy loss."
+  },
+  "error_analysis": {
+    "items_flipped_vs_fp16": {
+      "int4": 9,
+      "int8": 9,
+      "of_n": 110
+    },
+    "direction": "bidirectional (quant sometimes right where FP16 wrong, and vice versa)",
+    "interpretation": "non-systematic boundary noise, not systematic degradation; several items show a model-level A/B bias shared by FP16 (not quantization-induced)"
   }
 }
