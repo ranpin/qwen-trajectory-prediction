@@ -26,8 +26,8 @@
 | **M1** 数据+口径 | 申请 PhysicalAI-AV;下 200–500 段→eval JSONL(obs/gt,6.4s/64pt/10Hz);CVM 基线 | 本地 | 子集+CVM 数值 | ◻ 待数据审批（合成占位已通） |
 | **M2a** 量化(Cosmos-Reason2-8B) | 云上 INT8/INT4 → export ONNX → scp → Orin build → **推理跑通** | 云→Orin | ≥2 精度引擎 | ✅ 完成（INT4+INT8，Orin 真实出 token） |
 | **M2b** Alpamayo FP16 | 云上 export(onnx/llm+visual+action)→ scp → Orin build | 云→Orin | Orin 上出 1 条轨迹(验证 Orin 可跑) | ◻ 未启动 |
-| **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin+云 | 两张结果表 | ✅ 大部（Cosmos 掉点定量已出：FP16 参考下 PPL INT4 +9.8%/INT8 +18.1% + token 一致率，见 `eval/accuracy/`；仅 AV 轨迹表压在 VLA 轨道） |
-| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ◧ 大部（INT4/INT8 延迟+吞吐+显存+**功耗/能效+sweep+多模态+掉点**已测；仅缺 Orin 上 FP16 延迟点——FP16 仅云端跑了精度参考，未在 Orin 建引擎） |
+| **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin+云 | 两张结果表 | ✅ 完成（**真实基准 MC 任务正确率**：Cosmos-Reason1-Benchmark robovqa FP16 88.2%/INT8·INT4 87.3%，掉点 −0.9pts；+ perplexity 辅助，见 `eval/accuracy/`；仅 AV 轨迹表压在 VLA 轨道） |
+| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ✅ 大部（INT4/INT8 **TTFT/TPOT/TPS/E2E+功耗/能效+sweep+多模态+掉点**齐；**FP16 引擎 Orin build 期 OOM(exit137)→无法部署**，本身即"量化必需"的发现，故无 FP16 设备端点） |
 | **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ✅ 完成（[M5_report.md](M5_report.md) 一页总结 + 5 张图表（含掉点）+ 简历 bullet；仅缺 AV 轨道数据） |
 
 **关键路径/风险点**:M2b(Alpamayo 能否在 Orin FP16 跑通)是最大不确定;跑不通则 VLA 轨道降级为"导出成功+Orin 运行受阻"如实记录,量化轨道(Cosmos)已**独立跑通并出指标**,项目已完整成立。

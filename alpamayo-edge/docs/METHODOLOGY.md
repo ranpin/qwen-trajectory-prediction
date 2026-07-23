@@ -33,7 +33,8 @@
 ## 2. 数据集(三处,用途不同,都不是我们训练的)
 
 1. **量化校准集(PTQ calibration)** —— 见 §4,`cnn_dailymail` 512 篇。
-2. **精度评测探针集** —— **12 条我们手写的**驾驶物理/决策/常识 prompt(`eval/accuracy/prompts_greedy.json`)。**无 ground-truth 标注**;perplexity/一致率指标不需要标注。**这不是标准 benchmark**(未跑 MMLU/MMMU 等),是小规模定性探针,结论仅在此集上成立。
+2. **精度评测基准(主)** —— **官方 [`nvidia/Cosmos-Reason1-Benchmark`](https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark) 的 `robovqa` 子集**:110 道**多选题带标准答案**(具身机器人推理,视频+问题)。视频按 **6 帧(≤448px)** 采样作多图,FP16/INT8/INT4 用**同一批帧**→算 **MC 任务正确率**及掉点。产物 `eval/accuracy/benchmark/`。**注**:仅 robovqa 子集、6帧@448 非官方原生视频协议,故绝对分不追求复现论文,但三方同帧→掉点严格可比。
+   - **精度探针集(辅)** —— 12 条手写驾驶/推理 prompt(`eval/accuracy/prompts_greedy.json`,无标注),仅用于更敏感的 perplexity 相对指标。
 3. **性能基准的输入** —— `llm_bench` 用**合成 token 序列**(指定 `inputLen`/`pastKVLen`),测的是纯 prefill/decode 算力,与内容无关,是延迟基准的标准做法。
 
 > 诚实边界:**没有带标注的下游任务正确率**(无公开 AV-QA 标注集可用+算力/时间约束)。精度结论基于 perplexity/一致率的相对退化,不是任务准确率。
@@ -53,13 +54,18 @@ llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iteratio
 - **Prefill**:一次并行处理 512 输入 token(计算密集)。**Decode**:在 512 长度 KV 缓存上生成 1 个 token 的单步延迟(访存密集)。
 - 引擎构建参数(三版一致,来自 `LLMEngineConfig` 日志):`maxBatch=4 maxInputLen=1024 maxKVCapacity=4096`。
 - **可复现性验证(2026-07-22 重跑 INT4)**:prefill `301.22 ± 0.26 ms / 1699.7 tok·s`、decode `33.93 ± 6.89 ms / 29.5 tok·s`,与首测(300.98 ms/1701、32.34 ms/30.9)在 run-to-run 噪声内一致(decode 单步方差天然大)。
+- **标准服务指标映射**:**TTFT**(首 token 延迟)= prefill E2E(随输入长度变化,INT4 128/512/1024-token ≈ 86/301/595 ms);**TPOT/ITL** = decode 单 token 延迟;**输出 TPS** = 1000/TPOT;**E2E**(512-in+128-out)= TTFT + 128·TPOT(INT4 ≈ 4.44 s、INT8 ≈ 6.64 s)。
+- **FP16 无设备端基线**:FP16 引擎(~16GB)在 Orin `llm_build` 期 **OOM 被杀(exit 137)**,16GB+TRT builder workspace > 29GB 统一内存 → FP16 的 TTFT/TPS 无法在设备上测得;这本身是结论(量化是部署前提),加速比以显存可行性替代。
 
 ### 3.2 功耗 / 能效 —— `tegrastats`
 - 在 bench 运行期采样 `tegrastats`,日志留档 `pw_int4_pre.log`/`pw_int4_dec.log`/`pw_int8_*`。
 - **整机功耗 = VDD_GPU_SOC + VDD_CPU_CV + VIN_SYS_5V0** 三轨之和(mW),取 GPU-active 段均值。
 - **能效 tok/J = 吞吐(tok/s) ÷ 平均功耗(W)**。
 
-### 3.3 量化掉点 —— FP16 参考(`eval/accuracy/`)
+### 3.3 量化掉点(`eval/accuracy/`)
+**主指标 — MC 任务正确率(真实基准)**:在 Cosmos-Reason1-Benchmark(robovqa,110 MC)上,FP16(云端 PyTorch)/INT8/INT4(Orin) 用同一批 6 帧@448 多图,模型贪心输出→正则解析首个 A–D 字母→比标准答案。**结果:FP16 88.2% / INT8 87.3% / INT4 87.3%(掉点 −0.9 pts)**,与 FP16 预测一致率 91.8%。产物 `eval/accuracy/benchmark/RESULTS.json`。
+
+**辅助指标 — perplexity + token 一致率(12 prompt 探针)**:
 - FP16 参考在 **Kaggle T4×2** 用 PyTorch 加载原模型(Orin 无外网、8B fp16≈16GB 本地装不下)。
 - **perplexity(teacher-forced)**:对每段输出,拼接 `formatted_prompt + answer`,掩掉 prompt token(label=-100),用 **FP16 模型**前向得答案 token 的平均 NLL,再 `exp` → perplexity。"原模型对该输出有多惊讶",越低越贴近 FP16 分布。相对增幅(vs fp16 自身输出)是退化信号。
 - **token 一致前缀**:同一 prompt 贪心(`top_k=1` 确定性),量化输出与 FP16 输出逐 token 相同的最长开头长度 / 占比。

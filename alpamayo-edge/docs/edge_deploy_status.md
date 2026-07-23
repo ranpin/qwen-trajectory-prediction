@@ -69,7 +69,21 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 
 ## 量化掉点（vs FP16 基线）✅
 
-补齐"精度轴"：FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（Orin 无外网、8B fp16≈16GB 本地装不下，故走云端一次性），对**同一批 12 条固定 prompt**（驾驶物理推理+决策+常识，贪心 `top_k=1` 确定性）产出：产物与复现脚本见 [`eval/accuracy/`](../eval/accuracy/)。
+### 主：真实基准任务正确率（Cosmos-Reason1-Benchmark robovqa，110 MC 带标准答案）
+
+| | FP16 参考 | INT4 (AWQ) | INT8 (SmoothQuant) |
+|---|---|---|---|
+| MC 任务正确率 | 88.2% | 87.3% | 87.3% |
+| 相对 FP16 掉点 | — | **−0.9 pts** | **−0.9 pts** |
+| 与 FP16 预测一致率 | 100% | 91.8% | 91.8% |
+
+视频按 6 帧(≤448px)采样作多图，FP16(云端 PyTorch)/INT8/INT4(Orin) **同帧**→掉点严格可比。**量化保留 ~99% FP16 任务正确率**。方法/口径见 [METHODOLOGY.md](METHODOLOGY.md) §3.3；产物 `eval/accuracy/benchmark/`。robovqa 子集(具身机器人推理，非驾驶)、6帧@448 非官方原生视频协议——绝对分不追求复现论文。
+
+> **FP16 无设备端性能基线**：FP16 引擎(~16GB)在 Orin `llm_build` 期 **OOM 被杀(exit 137)** → FP16 无法在此边缘设备部署；**量化是落地必需**，"加速比"以显存可行性(FP16 装不下、INT4/INT8 从容)替代呈现。
+
+### 辅：细粒度 perplexity 探针（12 prompt）
+
+FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（Orin 无外网、8B fp16≈16GB 本地装不下，故走云端一次性），对**同一批 12 条固定 prompt**（驾驶物理推理+决策+常识，贪心 `top_k=1` 确定性）产出：产物与复现脚本见 [`eval/accuracy/`](../eval/accuracy/)。
 
 **方法**：Orin 上 INT4/INT8 引擎贪心生成实际输出 → 用 FP16 模型对每段输出做 **teacher-forced perplexity** 打分（"原始模型对量化输出有多惊讶"，PPL 越低=越贴近 FP16 分布）；并统计与 FP16 贪心输出的 **token 一致前缀**。完整定义见 [METHODOLOGY.md](METHODOLOGY.md) §3.3。
 

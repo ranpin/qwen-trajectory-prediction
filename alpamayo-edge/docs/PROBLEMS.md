@@ -77,5 +77,31 @@
 - **解决**：`DocCard` 判断 `file` 以 `http(s)://`/`//` 开头则原样用（PR #24）。
 - **教训**：目录清单要原生支持相对条目与绝对外链两种。
 
+## E. 基准评测（Cosmos-Reason1-Benchmark）
+
+### E1. `kaggle kernels output` 下载 15GB 大文件卡死在 0B
+- **现象**：拉云端 FP16 ONNX(15GB) 时进程挂起，文件停在 0B。
+- **根因**：kaggle CLI 的 `kernels_output` 用 `requests.get(url, stream=True)` 却又 `out.write(resp.content)`——**把整个 15GB 读进内存**再写盘，内存扛不住。
+- **解决**：用 API 取签名 URL，`curl -L --http1.1 -C -` **流式+断点续传**（服务器还会 HTTP/2 断流，故 `--http1.1` + 循环重试直到 `tar tzf` 校验通过）。
+- **教训**：大文件别用会全量读内存的下载器；流式+可续传+完整性校验。
+
+### E2. 基准仓库结构非 parquet
+- **现象**：按 datasets-server 显示的 parquet 列去读，`No objects to concatenate`。
+- **根因**：datasets-server 的 parquet 是自动转换的；**真实仓库是 `*_qa_pairs.json`（标注）+ `clips.tar.gz`（视频，需解包）**。
+- **解决**：从 JSON 读记录、解包 clips.tar.gz、按相对路径 `clips/xxx.mp4` 定位。
+- **教训**：先看仓库真实文件布局（snapshot 后 `ls`），别只信 viewer。
+
+### E3. 视觉引擎 patch 上限 —— 多帧超限
+- **现象**：6 帧全分辨率多图推理，`qwenViTRunner: cuSeqlens 6120 exceeds maxHW=4096`，全部请求失败。
+- **根因**：Orin 视觉(ViT)引擎构建上限 **总 patch 数 4096**；6 帧 × ~1020 patch = 6120 超限。
+- **解决**：帧**缩放到 ≤448px**（每帧 ~256 patch，6 帧≈1536<4096）；**FP16 与 Orin 用同一批缩放帧**保证掉点可比。
+- **教训**：边缘视觉引擎有固定输入上限；多图/多帧要按 patch 预算设计分辨率与帧数。
+
+### E4. FP16 引擎在 Orin build 期 OOM
+- **现象**：`llm_build` FP16 引擎，进程消失、引擎目录空、detached 重试 **exit 137（SIGKILL/OOM）**。
+- **根因**：FP16 权重 ~16GB + TensorRT builder workspace 峰值 > 29GB 统一内存（lean `--maxKVCacheCapacity` 只降运行时 KV，不降 build 峰值）。
+- **结论（非纯 bug，是发现）**：**FP16 无法在此 Orin 部署 → 量化是落地必需**。故 FP16 无设备端性能基线，用"显存装不下"替代加速比呈现。
+- **教训**：边缘设备上大模型 FP16 常连 build 都过不去；量化不只是提速，而是**能否部署**的前提。
+
 ---
 > 说明：**量化校准集用的是通用新闻文本（非驾驶域）** 属于**方法局限/口径**而非 bug，其影响分析见 [METHODOLOGY.md](METHODOLOGY.md) §4 与主页面「思考讨论」。
