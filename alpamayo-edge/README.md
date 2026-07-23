@@ -20,6 +20,7 @@ sweep/多模态全套指标。详见 **[docs/edge_deploy_status.md](docs/edge_de
 | [docs/M5_report.md](docs/M5_report.md) | **一页总结（可展示）**：做了什么、核心图表、能用来干什么、诚实边界、简历 bullet |
 | [docs/edge_deploy_status.md](docs/edge_deploy_status.md) | **结果报告**：链路、产物体积、性能/功耗/sweep/多模态全套指标、选型结论、next-steps 处置 |
 | [docs/orin_build_notes.md](docs/orin_build_notes.md) | **工程日志**：正确 Orin 构建配方、复现命令、全部踩坑、FMHA 崩溃根因深挖 |
+| [docs/orin_goat_migration_plan.md](docs/orin_goat_migration_plan.md) | **64GB orin-goat 迁移计划**：补 FP16 性能基线 + 跨设备复现（32GB 机 FP16 build OOM 的解法） |
 | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | **方法与可复现性**：模型/权重来源、数据集、指标定义与测法、**量化校准集(cnn_dailymail 512)及影响分析** |
 | [eval/accuracy/](eval/accuracy/) | 量化掉点评测产物：prompts + Orin 输出 + FP16 参考 + 汇总脚本 |
 | [docs/plan.md](docs/plan.md) | 项目计划、里程碑（M0–M5 状态）、目录结构、风险 |
