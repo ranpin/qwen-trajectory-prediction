@@ -87,7 +87,7 @@ FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（O
 
 **方法**：Orin 上 INT4/INT8 引擎贪心生成实际输出 → 用 FP16 模型对每段输出做 **teacher-forced perplexity** 打分（"原始模型对量化输出有多惊讶"，PPL 越低=越贴近 FP16 分布）；并统计与 FP16 贪心输出的 **token 一致前缀**。完整定义见 [METHODOLOGY.md](METHODOLOGY.md) §3.3。
 
-> **量化校准集（重要）**：两版均为 NVIDIA ModelOpt PTQ，校准用**工具默认的 512 篇 CNN/DailyMail 新闻文本**（纯文本，**非驾驶域**；INT4=AWQ W4A16、INT8=SmoothQuant W8A8；视觉塔未量化保 fp16）。域错配可能放大掉点、且对连激活也量化的 INT8 更不利——**是 INT8 掉点更大的合理主因之一（机制明确、未做消融）**。详见 [METHODOLOGY.md](METHODOLOGY.md) §4。
+> **量化校准集 + 消融（重要）**：两版均为 NVIDIA ModelOpt PTQ，校准用**默认 512 篇 CNN/DailyMail 新闻**（INT4=AWQ W4A16、INT8=SmoothQuant W8A8；视觉塔未量化）。**已做域内校准消融**：原假设"新闻域错配拖累 INT8"，但用域内小集重量化 INT8 后**反而暴跌**（perplexity +244%、MC 84.5%）→ **假设推翻**；真正结论=**校准集覆盖度/质量比域匹配更重要**，默认 news-512 得验证。详见 [METHODOLOGY.md](METHODOLOGY.md) §4 与 `eval/accuracy/ablation_calibration/`。
 
 | 指标 | FP16 参考 | INT4 (AWQ) | INT8 (SmoothQuant) |
 |---|---|---|---|
