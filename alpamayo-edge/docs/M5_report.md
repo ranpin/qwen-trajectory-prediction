@@ -5,7 +5,7 @@
 
 ## 摘要
 
-把 NVIDIA **Cosmos-Reason2-8B**（自动驾驶物理场景推理多模态大模型，属"感知+推理/可解释"层，**不是**轨迹预测器）用 **TensorRT-Edge-LLM** 量化为 **INT4 (AWQ)** 与 **INT8 (SmoothQuant)**，部署到 **Jetson Orin (sm_87)**，端到端跑通引擎构建→加载→prefill→decode→真实文本/图像推理，测出延迟/吞吐/显存/功耗/能效完整画像 + 用 FP16 参考量化掉点。**核心结论：decode 看 INT4、prefill 看 INT8；INT4 在本工作负载既更快（decode 1.57×）又更保真（掉点 +9.8% vs INT8 +18.1%）。** 零预算 · 零训练 · 全 Orin。
+把 NVIDIA **Cosmos-Reason2-8B**（物理场景推理多模态大模型，属"感知+推理/可解释"层，**不是**轨迹预测器）用 **TensorRT-Edge-LLM** 量化为 **INT4 (AWQ)** 与 **INT8 (SmoothQuant)**，部署到 **Jetson Orin (sm_87)** 端到端跑通推理；按标准服务指标(TTFT/TPOT/TPS/E2E)测性能功耗，在**官方 Cosmos-Reason1-Benchmark(带标准答案)**测任务正确率+CI/显著性。**核心结论：① 量化是落地必需——FP16(16GB) 在 Orin build 期 OOM 装不下；② 量化无显著正确率损失(n=210,McNemar p>0.4)；③ 选型 decode 看 INT4、prefill 看 INT8。** 零预算 · 零训练 · 全 Orin。
 
 - **输入**：图像/视频帧 + 文字问题；**输出**：文字推理（场景描述/风险判断/行动建议），非轨迹路点。
 
@@ -27,7 +27,7 @@
 > **横轴**：左=输入长度(token)，右=精度<br>**竖轴**：左=TTFT(ms)，右=E2E(s，prefill+decode 堆叠)<br>**结果**：TTFT 随输入近线性(INT4 86→595ms@128→1024)；512-in+128-out E2E INT4 4.44s < INT8 6.64s<br>**分析**：生成越长 decode(TPOT) 越主导 → INT4 的 E2E 更优；FP16 因 OOM 无设备端数据
 
 ![benchmark accuracy](figures/benchmark_accuracy.png)
-> **横轴**：三种精度(FP16/INT8/INT4)<br>**竖轴**：真实基准 MC 任务正确率 %(绿虚线=FP16 88.2%)<br>**结果**：FP16 88.2%、INT8/INT4 均 87.3%（−0.9 pts，误差棒=Wilson 95%CI）<br>**分析**：CI 大幅重叠、McNemar p=1.0 → 差异**统计不显著**(n=110)，稳妥结论=**量化无显著任务正确率损失**。**另:FP16 引擎在 Orin build 期 OOM(16GB>29GB)→ 量化是部署必需**。
+> **横轴**：三种精度(FP16/INT8/INT4)<br>**竖轴**：真实基准 MC 任务正确率 %(绿虚线=FP16 76.2%)<br>**结果**：n=210(robovqa+robofail) FP16 76.2%、INT8 75.2%、INT4 73.8%（误差棒=Wilson 95%CI）<br>**分析**：CI 重叠、McNemar p>0.4 → 差异**统计不显著**，稳妥结论=**量化无显著任务正确率损失**。**另:FP16 引擎在 Orin build 期 OOM(16GB>29GB)→ 量化是部署必需**。
 
 ![accuracy drop-off](figures/accuracy_dropoff.png)
 > （辅助/细粒度）**横轴**：左=平均 perplexity，右=与 FP16 的一致性(一致前缀占比 % / 长度 token)<br>**竖轴**：左=perplexity(越低越贴近 FP16，虚线=FP16 基线 1.237)，右=百分比 / token 数<br>**结果**：INT4 掉点 +9.8% 小于 INT8 +18.1%<br>**分析**：INT4(W4A16 纯权重、激活留 16bit)对校准域错配更鲁棒，INT8(W8A8)连激活量化更敏感 → 掉点更大；本负载 INT4 既快又保真
@@ -67,7 +67,7 @@
 
 - 用 NVIDIA TensorRT-Edge-LLM 将 8B 多模态大模型 (Cosmos-Reason2) 量化为 INT4/INT8 并部署至 Jetson Orin，
   实测标准服务指标 **INT4 decode 30.9 TPS / TTFT 301ms @ ~40W**、**INT8 prefill 3252 TPS**；在**官方 Cosmos-Reason1-Benchmark**
-  上量化**无显著任务正确率损失**(88.2%→87.3%，−0.9pts，McNemar p=1.0)；并发现 **FP16(16GB) 在 Orin OOM 无法部署→量化是落地必需**。
+  上量化**无显著任务正确率损失**(n=210，McNemar p>0.4)；并发现 **FP16(16GB) 在 Orin OOM 无法部署→量化是落地必需**。
 - 定位并修复 sm_87 上的 FMHA kernel 派发崩溃：从崩溃断言追到 CMake 构建配置（漏传 Orin target flag
   致 sm_87 kernel 被编译排除），非平凡的跨层（运行时 kernel 表 ↔ 编译宏 ↔ CMake）根因排查。
 - 建立 INT4/INT8 在延迟/吞吐/显存/功耗/能效/上下文扩展性/量化掉点的完整边缘画像，沉淀为可复用部署工作流。

@@ -69,15 +69,17 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 
 ## 量化掉点（vs FP16 基线）✅
 
-### 主：真实基准任务正确率（Cosmos-Reason1-Benchmark robovqa，110 MC 带标准答案）
+### 主：真实基准任务正确率（Cosmos-Reason1-Benchmark robovqa+robofail，n=210 MC 带标准答案）
 
-| | FP16 参考 | INT4 (AWQ) | INT8 (SmoothQuant) |
+| 子集 | FP16 参考 | INT4 (AWQ) | INT8 (SmoothQuant) |
 |---|---|---|---|
-| MC 任务正确率 | 88.2% | 87.3% | 87.3% |
-| Wilson 95% CI | [80.8,93.0] | [79.8,92.3] | [79.8,92.3] |
-| 相对 FP16 | — | −0.9 pts (p=1.0) | −0.9 pts (p=1.0) |
+| robovqa（n=110，较易） | 88.2% | 87.3% | 87.3% |
+| robofail（n=100，更难） | 63.0% | 59.0% | 62.0% |
+| **总体（n=210）** | **76.2%** | **73.8%** | **75.2%** |
+| 总体 Wilson 95%CI | [70.0,81.4] | [67.5,79.3] | [69.0,80.6] |
+| 总体 vs FP16（McNemar） | — | −2.4pts p=0.42 不显著 | −1.0pts p=0.85 不显著 |
 
-视频按 6 帧(≤448px)采样作多图，FP16(云端 PyTorch)/INT8/INT4(Orin) **同帧**→掉点严格可比。**统计检验:CI ≈ ±6pts、McNemar p=1.0 → 差异不显著(n=110 偏小)** → 稳妥结论是**量化无显著任务正确率损失**(非精确"掉 0.9pts")。方法/口径见 [METHODOLOGY.md](METHODOLOGY.md) §3.3；产物 `eval/accuracy/benchmark/`。robovqa 子集(具身机器人推理，非驾驶)、6帧@448 非官方原生视频协议——绝对分不追求复现论文。
+视频按 6 帧(≤448px)采样作多图，FP16(云端 PyTorch)/INT8/INT4(Orin) **同帧**→掉点严格可比。**统计检验:CI 重叠、McNemar p>0.4 → 差异不显著(n=210；robovqa 88.2%+robofail 63%)** → 稳妥结论是**量化无显著任务正确率损失**(非精确"掉 0.9pts")。方法/口径见 [METHODOLOGY.md](METHODOLOGY.md) §3.3；产物 `eval/accuracy/benchmark/`。robovqa 子集(具身机器人推理，非驾驶)、6帧@448 非官方原生视频协议——绝对分不追求复现论文。
 
 > **FP16 无设备端性能基线**：FP16 引擎(~16GB)在 Orin `llm_build` 期 **OOM 被杀(exit 137)** → FP16 无法在此边缘设备部署；**量化是落地必需**，"加速比"以显存可行性(FP16 装不下、INT4/INT8 从容)替代呈现。
 

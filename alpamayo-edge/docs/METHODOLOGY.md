@@ -33,11 +33,11 @@
 ## 2. 数据集(三处,用途不同,都不是我们训练的)
 
 1. **量化校准集(PTQ calibration)** —— 见 §4,`cnn_dailymail` 512 篇。
-2. **精度评测基准(主)** —— **官方 [`nvidia/Cosmos-Reason1-Benchmark`](https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark) 的 `robovqa` 子集**:110 道**多选题带标准答案**(具身机器人推理,视频+问题)。视频按 **6 帧(≤448px)** 采样作多图,FP16/INT8/INT4 用**同一批帧**→算 **MC 任务正确率**及掉点。产物 `eval/accuracy/benchmark/`。**注**:仅 robovqa 子集、6帧@448 非官方原生视频协议,故绝对分不追求复现论文,但三方同帧→掉点严格可比。
+2. **精度评测基准(主)** —— **官方 [`nvidia/Cosmos-Reason1-Benchmark`](https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark) 的 `robovqa+robofail` 子集**:n=210 道**多选题带标准答案**(具身机器人推理,视频+问题)。视频按 **6 帧(≤448px)** 采样作多图,FP16/INT8/INT4 用**同一批帧**→算 **MC 任务正确率**及掉点。产物 `eval/accuracy/benchmark/`。**注**:robovqa+robofail 是 repo 内自带视频的全部子集(其余 3 子集仅标注,需外部视频);6帧@448 非官方原生视频协议,故绝对分不追求复现论文,但三方同帧→掉点严格可比。
    - **精度探针集(辅)** —— 12 条手写驾驶/推理 prompt(`eval/accuracy/prompts_greedy.json`,无标注),仅用于更敏感的 perplexity 相对指标。
 3. **性能基准的输入** —— `llm_bench` 用**合成 token 序列**(指定 `inputLen`/`pastKVLen`),测的是纯 prefill/decode 算力,与内容无关,是延迟基准的标准做法。
 
-> 诚实边界:**没有带标注的下游任务正确率**(无公开 AV-QA 标注集可用+算力/时间约束)。精度结论基于 perplexity/一致率的相对退化,不是任务准确率。
+> 说明:主指标已是**带标注的 MC 任务正确率**(Cosmos-Reason1-Benchmark);perplexity/一致率为细粒度辅助。局限:非驾驶域(具身机器人)、仅 210 题(二选一 MC,CI 仍 ±5.7)。
 
 ## 3. 指标定义与测量方法(全部可复现)
 
@@ -63,7 +63,7 @@ llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iteratio
 - **能效 tok/J = 吞吐(tok/s) ÷ 平均功耗(W)**。
 
 ### 3.3 量化掉点(`eval/accuracy/`)
-**主指标 — MC 任务正确率(真实基准)**:在 Cosmos-Reason1-Benchmark(robovqa,110 MC)上,FP16(云端 PyTorch)/INT8/INT4(Orin) 用同一批 6 帧@448 多图,模型贪心输出→正则解析首个 A–D 字母→比标准答案。**结果:FP16 88.2% / INT8 87.3% / INT4 87.3%(−0.9 pts)**,与 FP16 一致率 91.8%。**统计检验:Wilson 95% CI ≈ ±6pts(FP16[80.8,93.0]、INT4/INT8[79.8,92.3]),McNemar p=1.0 → 差异统计不显著**(n=110、二选一,CI 偏宽)。稳妥结论:**量化无显著任务正确率损失**;要分辨 INT4/INT8 需扩样本+更难多选题。产物 `eval/accuracy/benchmark/RESULTS.json`。
+**主指标 — MC 任务正确率(真实基准)**:在 Cosmos-Reason1-Benchmark(robovqa 110 + robofail 100)上,FP16(云端 PyTorch)/INT8/INT4(Orin) 用同一批 6 帧@448 多图,模型贪心输出→正则解析首个 A–D 字母→比标准答案。**结果**:分项 robovqa FP16 88.2%/INT8 87.3%/INT4 87.3%,robofail(更难) 63.0%/62.0%/59.0%;**总体 n=210 FP16 76.2% / INT8 75.2% / INT4 73.8%**。**统计检验:Wilson 95% CI 重叠(FP16[70.0,81.4]),McNemar vs FP16 p=0.85(INT8)/0.42(INT4) → 差异统计不显著**。稳妥结论:**量化无显著任务正确率损失**;要分辨 INT4/INT8 需扩样本+更难多选题。产物 `eval/accuracy/benchmark/RESULTS.json`。
 
 **辅助指标 — perplexity + token 一致率(12 prompt 探针)**:
 - FP16 参考在 **Kaggle T4×2** 用 PyTorch 加载原模型(Orin 无外网、8B fp16≈16GB 本地装不下)。

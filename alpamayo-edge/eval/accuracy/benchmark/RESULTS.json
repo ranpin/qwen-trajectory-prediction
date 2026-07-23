@@ -1,39 +1,38 @@
 {
-  "benchmark": "nvidia/Cosmos-Reason1-Benchmark (robovqa)",
+  "benchmark": "nvidia/Cosmos-Reason1-Benchmark (robovqa+robofail)",
   "format": "multiple-choice, ground-truth",
-  "n": 110,
+  "n": 210,
   "frames_per_video": 6,
   "frame_max_side": 448,
-  "note": "K=6 frames resized<=448px fed as multi-image; same frames on FP16(cloud PyTorch) and Orin INT4/INT8 -> drop-off valid",
+  "note": "Only robovqa(110)+robofail(100) ship videos in-repo; agibot/bridgev2/holoassist(300) are annotations-only (need external source videos) -> full 510 needs external video pipeline (future work). No Cosmos-Reason2-Benchmark exists (404); Cosmos-Reason1-Benchmark is the appropriate available benchmark.",
   "accuracy": {
-    "fp16": 0.8818,
-    "int8": 0.8727,
-    "int4": 0.8727
+    "fp16": 0.762,
+    "int8": 0.752,
+    "int4": 0.738
   },
   "dropoff_pts_vs_fp16": {
-    "int8": -0.9,
-    "int4": -0.9
+    "int8": -1.0,
+    "int4": -2.4
   },
   "statistics": {
     "ci_method": "Wilson 95%",
-    "fp16_ci_pts": [
-      80.8,
-      93.0
+    "fp16_ci": [
+      70.0,
+      81.4
     ],
-    "int8_ci_pts": [
-      79.8,
-      92.3
+    "int8_ci": [
+      69.0,
+      80.6
     ],
-    "int4_ci_pts": [
-      79.8,
-      92.3
+    "int4_ci": [
+      67.5,
+      79.3
     ],
     "mcnemar_p": {
-      "int4_vs_fp16": 1.0,
-      "int8_vs_fp16": 1.0,
-      "int4_vs_int8": 1.0
+      "int4_vs_fp16": 0.424,
+      "int8_vs_fp16": 0.845
     },
-    "conclusion": "No statistically significant accuracy difference (n=110, binary MC; CI ~±6pts). Quantization shows no significant task-accuracy loss."
+    "conclusion": "No statistically significant accuracy loss (n=210; all McNemar p>0.4; CIs overlap). robovqa 88.2%, robofail 63% (harder)."
   },
   "error_analysis": {
     "items_flipped_vs_fp16": {
@@ -43,5 +42,21 @@
     },
     "direction": "bidirectional (quant sometimes right where FP16 wrong, and vice versa)",
     "interpretation": "non-systematic boundary noise, not systematic degradation; several items show a model-level A/B bias shared by FP16 (not quantization-induced)"
+  },
+  "per_subset": {
+    "robovqa": {
+      "n": 110,
+      "fp16": 0.882,
+      "int8": 0.873,
+      "int4": 0.873,
+      "int8_domain": 0.845
+    },
+    "robofail": {
+      "n": 100,
+      "fp16": 0.63,
+      "int8": 0.62,
+      "int4": 0.59,
+      "int8_domain": 0.63
+    }
   }
 }

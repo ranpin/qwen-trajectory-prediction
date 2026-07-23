@@ -96,24 +96,26 @@ fig.suptitle("Quantization drop-off vs FP16 (12 driving/reasoning prompts, greed
 fig.tight_layout(rect=(0, 0, 1, 0.96))
 fig.savefig(os.path.join(OUT, "accuracy_dropoff.png")); plt.close(fig)
 
-# ---- Fig 6: task accuracy on official benchmark (Cosmos-Reason1 robovqa, MC) ----
-# Wilson 95% CI (n=110): FP16 [80.8,93.0], INT4/INT8 [79.8,92.3]. McNemar p=1.0 (not significant).
-fig, ax = plt.subplots(figsize=(7.2, 4.4))
-labels = ["FP16\n(ref)", "INT8\n(SmoothQuant)", "INT4\n(AWQ)"]
-accs = [88.2, 87.3, 87.3]
-errs = [[7.4, 7.5, 7.5], [4.8, 5.0, 5.0]]  # [lower, upper] Wilson 95% CI half-widths
-colors = ["#16a34a", C8, C4]
-b = ax.bar(labels, accs, color=colors, width=0.55,
-           yerr=errs, capsize=6, error_kw=dict(ecolor="#334155", lw=1.4))
-for r, a in zip(b, accs):
-    ax.annotate(f"{a}%", (r.get_x()+r.get_width()/2, a), ha="center", va="bottom",
-                fontsize=11, fontweight="bold", xytext=(0, 9), textcoords="offset points")
-ax.set_ylabel("multiple-choice accuracy (%)")
-ax.set_ylim(60, 102)
-ax.axhline(88.2, color="#16a34a", lw=1.0, ls="--", alpha=0.5)
-ax.set_title("Cosmos-Reason1-Benchmark robovqa (n=110 MC, ground-truth)\n"
-             "No significant accuracy loss: -0.9 pts within 95% CI (±6), McNemar p=1.0",
-             fontweight="bold", fontsize=11)
+# ---- Fig 6: task accuracy per subset + overall (Cosmos-Reason1 MC, ground-truth) ----
+# Wilson 95% CI (overall n=210). McNemar vs FP16: INT8 p=0.85, INT4 p=0.42 (not significant).
+fig, ax = plt.subplots(figsize=(8.4, 4.6))
+groups = ["robovqa\n(n=110, easier)", "robofail\n(n=100, harder)", "ALL\n(n=210)"]
+fp16 = [88.2, 63.0, 76.2]; int8 = [87.3, 62.0, 75.2]; int4 = [87.3, 59.0, 73.8]
+x = np.arange(len(groups)); w = 0.26
+for off, vals, c, lab in [(-w, fp16, "#16a34a", "FP16 (ref)"),
+                          (0, int8, C8, "INT8 (SmoothQuant)"),
+                          (w, int4, C4, "INT4 (AWQ)")]:
+    bars = ax.bar(x + off, vals, w, color=c, label=lab)
+    for r, v in zip(bars, vals):
+        ax.annotate(f"{v:.1f}", (r.get_x()+r.get_width()/2, v), ha="center", va="bottom",
+                    fontsize=8.5, xytext=(0, 2), textcoords="offset points")
+ax.set_xticks(x); ax.set_xticklabels(groups)
+ax.set_ylabel("multiple-choice accuracy (%)"); ax.set_ylim(40, 100)
+ax.legend(fontsize=9, ncol=3, loc="upper center")
+ax.set_title("Task accuracy per subset + overall (Cosmos-Reason1-Benchmark, MC)\n"
+             "Quantization: no significant loss on either subset (McNemar p>0.4, overlapping 95% CI)",
+             fontweight="bold", fontsize=10.5)
+ax.margins(y=0.12)
 fig.tight_layout(); fig.savefig(os.path.join(OUT, "benchmark_accuracy.png")); plt.close(fig)
 
 # ---- Fig 7: standardized serving metrics (TTFT vs input length; E2E breakdown) ----

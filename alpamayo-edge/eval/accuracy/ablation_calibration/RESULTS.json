@@ -8,8 +8,12 @@
   "int8_domain": {
     "ppl": 4.255,
     "ppl_incr_pct": 244.1,
-    "robovqa_mc": 0.845
+    "robovqa_mc": 0.845,
+    "robovqa_mc_n110": 0.845,
+    "mc_n210": 0.743
   },
-  "conclusion": "REFUTED \u2014 in-domain(small/short) calibration drastically worse; calibration coverage/quality dominates over domain match; default news-512 validated",
-  "confound": "domain conflated with corpus size/length"
+  "conclusion": "REFUTED — in-domain(small/short) calibration drastically worse; calibration coverage/quality dominates over domain match; default news-512 validated",
+  "confound": "domain conflated with corpus size/length",
+  "int8_news_mc_n210": 0.752,
+  "mc_note": "on n=210, INT8-domain 74.3% ~ INT8-news 75.2% (domain calib did not help MC either; perplexity +244% is the decisive signal)"
 }
