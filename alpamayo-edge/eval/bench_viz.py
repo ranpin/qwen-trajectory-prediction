@@ -97,20 +97,23 @@ fig.tight_layout(rect=(0, 0, 1, 0.96))
 fig.savefig(os.path.join(OUT, "accuracy_dropoff.png")); plt.close(fig)
 
 # ---- Fig 6: task accuracy on official benchmark (Cosmos-Reason1 robovqa, MC) ----
-fig, ax = plt.subplots(figsize=(7, 4.2))
+# Wilson 95% CI (n=110): FP16 [80.8,93.0], INT4/INT8 [79.8,92.3]. McNemar p=1.0 (not significant).
+fig, ax = plt.subplots(figsize=(7.2, 4.4))
 labels = ["FP16\n(ref)", "INT8\n(SmoothQuant)", "INT4\n(AWQ)"]
 accs = [88.2, 87.3, 87.3]
+errs = [[7.4, 7.5, 7.5], [4.8, 5.0, 5.0]]  # [lower, upper] Wilson 95% CI half-widths
 colors = ["#16a34a", C8, C4]
-b = ax.bar(labels, accs, color=colors, width=0.6)
+b = ax.bar(labels, accs, color=colors, width=0.55,
+           yerr=errs, capsize=6, error_kw=dict(ecolor="#334155", lw=1.4))
 for r, a in zip(b, accs):
     ax.annotate(f"{a}%", (r.get_x()+r.get_width()/2, a), ha="center", va="bottom",
-                fontsize=11, fontweight="bold", xytext=(0, 2), textcoords="offset points")
+                fontsize=11, fontweight="bold", xytext=(0, 9), textcoords="offset points")
 ax.set_ylabel("multiple-choice accuracy (%)")
-ax.set_ylim(60, 100)
-ax.axhline(88.2, color="#16a34a", lw=1.2, ls="--", alpha=0.6)
-ax.set_title("Cosmos-Reason1-Benchmark robovqa (110 MC, ground-truth)\n"
-             "Quantization keeps ~99% of FP16 accuracy: only -0.9 pts",
-             fontweight="bold", fontsize=11.5)
+ax.set_ylim(60, 102)
+ax.axhline(88.2, color="#16a34a", lw=1.0, ls="--", alpha=0.5)
+ax.set_title("Cosmos-Reason1-Benchmark robovqa (n=110 MC, ground-truth)\n"
+             "No significant accuracy loss: -0.9 pts within 95% CI (±6), McNemar p=1.0",
+             fontweight="bold", fontsize=11)
 fig.tight_layout(); fig.savefig(os.path.join(OUT, "benchmark_accuracy.png")); plt.close(fig)
 
 print("wrote:", ", ".join(sorted(os.listdir(OUT))))

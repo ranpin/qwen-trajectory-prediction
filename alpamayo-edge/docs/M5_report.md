@@ -24,7 +24,7 @@
 > **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br>**竖轴**：体积(GB)<br>**结果**：INT4 比 INT8 约省 42%<br>**分析**：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存
 
 ![benchmark accuracy](figures/benchmark_accuracy.png)
-> **横轴**：三种精度(FP16/INT8/INT4)<br>**竖轴**：真实基准 MC 任务正确率 %(绿虚线=FP16 88.2%)<br>**结果**：FP16 88.2%、INT8/INT4 均 87.3%，掉点 −0.9 pts<br>**分析**：官方 Cosmos-Reason1-Benchmark(robovqa,带标准答案)上量化保留 ~99% 任务正确率 → 量化对下游正确率影响极小。**另:FP16 引擎在 Orin build 期 OOM(16GB>29GB)→ 量化是部署必需**。
+> **横轴**：三种精度(FP16/INT8/INT4)<br>**竖轴**：真实基准 MC 任务正确率 %(绿虚线=FP16 88.2%)<br>**结果**：FP16 88.2%、INT8/INT4 均 87.3%（−0.9 pts，误差棒=Wilson 95%CI）<br>**分析**：CI 大幅重叠、McNemar p=1.0 → 差异**统计不显著**(n=110)，稳妥结论=**量化无显著任务正确率损失**。**另:FP16 引擎在 Orin build 期 OOM(16GB>29GB)→ 量化是部署必需**。
 
 ![accuracy drop-off](figures/accuracy_dropoff.png)
 > （辅助/细粒度）**横轴**：左=平均 perplexity，右=与 FP16 的一致性(一致前缀占比 % / 长度 token)<br>**竖轴**：左=perplexity(越低越贴近 FP16，虚线=FP16 基线 1.237)，右=百分比 / token 数<br>**结果**：INT4 掉点 +9.8% 小于 INT8 +18.1%<br>**分析**：INT4(W4A16 纯权重、激活留 16bit)对校准域错配更鲁棒，INT8(W8A8)连激活量化更敏感 → 掉点更大；本负载 INT4 既快又保真
@@ -64,7 +64,7 @@
 
 - 用 NVIDIA TensorRT-Edge-LLM 将 8B 多模态大模型 (Cosmos-Reason2) 量化为 INT4/INT8 并部署至 Jetson Orin，
   实测标准服务指标 **INT4 decode 30.9 TPS / TTFT 301ms @ ~40W**、**INT8 prefill 3252 TPS**；在**官方 Cosmos-Reason1-Benchmark**
-  上量化仅掉 **0.9 个百分点(88.2%→87.3%)** 任务正确率；并发现 **FP16(16GB) 在 Orin OOM 无法部署→量化是落地必需**。
+  上量化**无显著任务正确率损失**(88.2%→87.3%，−0.9pts，McNemar p=1.0)；并发现 **FP16(16GB) 在 Orin OOM 无法部署→量化是落地必需**。
 - 定位并修复 sm_87 上的 FMHA kernel 派发崩溃：从崩溃断言追到 CMake 构建配置（漏传 Orin target flag
   致 sm_87 kernel 被编译排除），非平凡的跨层（运行时 kernel 表 ↔ 编译宏 ↔ CMake）根因排查。
 - 建立 INT4/INT8 在延迟/吞吐/显存/功耗/能效/上下文扩展性/量化掉点的完整边缘画像，沉淀为可复用部署工作流。

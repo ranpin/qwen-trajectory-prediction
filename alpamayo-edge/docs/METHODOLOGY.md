@@ -63,7 +63,7 @@ llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iteratio
 - **能效 tok/J = 吞吐(tok/s) ÷ 平均功耗(W)**。
 
 ### 3.3 量化掉点(`eval/accuracy/`)
-**主指标 — MC 任务正确率(真实基准)**:在 Cosmos-Reason1-Benchmark(robovqa,110 MC)上,FP16(云端 PyTorch)/INT8/INT4(Orin) 用同一批 6 帧@448 多图,模型贪心输出→正则解析首个 A–D 字母→比标准答案。**结果:FP16 88.2% / INT8 87.3% / INT4 87.3%(掉点 −0.9 pts)**,与 FP16 预测一致率 91.8%。产物 `eval/accuracy/benchmark/RESULTS.json`。
+**主指标 — MC 任务正确率(真实基准)**:在 Cosmos-Reason1-Benchmark(robovqa,110 MC)上,FP16(云端 PyTorch)/INT8/INT4(Orin) 用同一批 6 帧@448 多图,模型贪心输出→正则解析首个 A–D 字母→比标准答案。**结果:FP16 88.2% / INT8 87.3% / INT4 87.3%(−0.9 pts)**,与 FP16 一致率 91.8%。**统计检验:Wilson 95% CI ≈ ±6pts(FP16[80.8,93.0]、INT4/INT8[79.8,92.3]),McNemar p=1.0 → 差异统计不显著**(n=110、二选一,CI 偏宽)。稳妥结论:**量化无显著任务正确率损失**;要分辨 INT4/INT8 需扩样本+更难多选题。产物 `eval/accuracy/benchmark/RESULTS.json`。
 
 **辅助指标 — perplexity + token 一致率(12 prompt 探针)**:
 - FP16 参考在 **Kaggle T4×2** 用 PyTorch 加载原模型(Orin 无外网、8B fp16≈16GB 本地装不下)。

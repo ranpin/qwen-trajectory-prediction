@@ -13,5 +13,26 @@
   "dropoff_pts_vs_fp16": {
     "int8": -0.9,
     "int4": -0.9
+  },
+  "statistics": {
+    "ci_method": "Wilson 95%",
+    "fp16_ci_pts": [
+      80.8,
+      93.0
+    ],
+    "int8_ci_pts": [
+      79.8,
+      92.3
+    ],
+    "int4_ci_pts": [
+      79.8,
+      92.3
+    ],
+    "mcnemar_p": {
+      "int4_vs_fp16": 1.0,
+      "int8_vs_fp16": 1.0,
+      "int4_vs_int8": 1.0
+    },
+    "conclusion": "No statistically significant accuracy difference (n=110, binary MC; CI ~±6pts). Quantization shows no significant task-accuracy loss."
   }
 }
