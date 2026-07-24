@@ -76,7 +76,7 @@ footer a{color:var(--accent)}
   <p>把 NVIDIA <strong>Cosmos-Reason2-8B</strong>（物理场景推理 VLM，非轨迹预测器，属"感知 + 推理 / 可解释"层）用 <strong>TensorRT-Edge-LLM</strong> 量化为 <strong>INT4 (AWQ)</strong> 与 <strong>INT8 (SmoothQuant)</strong>，部署到 <strong>Jetson Orin (sm_87)</strong> 端到端跑通推理；按标准服务指标（TTFT / TPOT / TPS / E2E）测性能功耗，并在<strong>官方 Cosmos-Reason1-Benchmark（带标准答案）</strong>实测量化对<strong>任务正确率</strong>的影响。<span style="color:var(--muted)">零预算 · 零训练 · 全 Orin。</span></p>
   <p style="margin-bottom:4px"><strong>核心结论：</strong></p>
   <ol style="margin-top:0">
-    <li><strong>量化是落地必需</strong>：FP16 引擎（~16GB）在 Orin 上 build 期 <strong>OOM 装不下</strong>；INT4(4.6GB)/INT8(7.9GB) 才能部署。</li>
+    <li><strong>量化既提速又降低部署门槛</strong>：decode 比 FP16 快 <strong>2.66×(INT4)/1.70×(INT8)</strong>、E2E 快 2.5×；且 FP16 引擎 build 期需实测 <strong>~55GB 内存</strong>，32GB Orin 装不下(OOM)、须在 64GB 机 build（引擎再拷回 32GB 跑）。</li>
     <li><strong>量化无显著正确率损失</strong>：真实基准(n=210)上 FP16 76.2% / INT8 75.2% / INT4 73.8%，差异 <strong>全部统计不显著(McNemar p&gt;0.4、95%CI 重叠)</strong>。即量化在任务正确率上几乎无损。</li>
     <li><strong>选型：decode 看 INT4、prefill 看 INT8</strong>——INT4 decode 快 1.57×/更省电/更省显存(−42%)，INT8 prefill 快 1.9×/能效高 2.3×；生成越长 INT4 的 E2E 越占优。</li>
   </ol>
@@ -114,20 +114,21 @@ footer a{color:var(--accent)}
     <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption><b>横轴</b>：上下文长度(past-KV token 数，128→4000)<br><b>竖轴</b>：INT4 decode 吞吐 TPS (tokens/s)<br><b>结果</b>：上下文涨 31× 吞吐仅降 9%<br><b>分析</b>：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 ⇒ 适合长对话/长文档</figcaption></figure>
     <figure><img src="figures/footprint.png" alt="footprint"><figcaption><b>横轴</b>：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br><b>竖轴</b>：体积(GB)<br><b>结果</b>：INT4 比 INT8 约省 42%<br><b>分析</b>：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存</figcaption></figure>
   </div>
-  <figure><img src="figures/serving_metrics.png" alt="serving metrics TTFT/E2E"><figcaption><b>横轴</b>：左=输入长度(token)，右=两种精度<br><b>竖轴</b>：左=TTFT 首 token 延迟(ms)，右=E2E 端到端延迟(s，堆叠=prefill+decode)<br><b>结果</b>：TTFT 随输入近线性增(INT4 128→1024tok：86→595ms)；512-in+128-out 的 E2E，INT4 4.44s < INT8 6.64s<br><b>分析</b>：短输出/长输入看 TTFT(INT8 prefill 快)，但生成越长 decode(TPOT) 越主导 → INT4 的 E2E 反而更优；FP16 因 OOM 无设备端数据</figcaption></figure>
   <table>
-    <tr><th>标准服务指标（Orin sm_87 / JetPack 6.2 / CUDA 12.6 / TRT 10.7 / MAXN, batch=1）</th><th>FP16</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
-    <tr><td><b>TTFT</b> 首 token 延迟（512-token 输入 prefill）</td><td>✗</td><td>300.98 ms</td><td class="win">157.45 ms</td></tr>
-    <tr><td><b>TPOT / ITL</b> 每输出 token 延迟（decode@pastKV512）</td><td>✗</td><td class="win">32.34 ms</td><td>50.65 ms</td></tr>
-    <tr><td><b>输出 TPS</b>（decode 吞吐）</td><td>✗</td><td class="win">30.9</td><td>19.7</td></tr>
-    <tr><td><b>Prefill 吞吐</b></td><td>✗</td><td>1701 TPS</td><td class="win">3252 TPS</td></tr>
-    <tr><td><b>E2E 延迟</b>（512-in + 128-out = TTFT + 128·TPOT）</td><td>✗</td><td class="win">≈ 4.44 s</td><td>≈ 6.64 s</td></tr>
-    <tr><td>能效 prefill / decode（tokens·J⁻¹）</td><td>✗</td><td>27.5 / <span class="win">0.82</span></td><td><span class="win">62.8</span> / 0.50</td></tr>
-    <tr><td>引擎显存 (VRAM)</td><td>~16 GB<br>✗ 无法部署</td><td class="win">~4.6 GB</td><td>~7.9 GB</td></tr>
+    <tr><th>标准服务指标（Orin sm_87 / CUDA 12.6.11 / TRT 10.7 / MAXN, batch=1）</th><th>FP16 †</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
+    <tr><td><b>TTFT</b> 首 token 延迟（512-token 输入 prefill）</td><td>298.1 ms</td><td>300.98 ms</td><td class="win">157.45 ms</td></tr>
+    <tr><td><b>TPOT / ITL</b> 每输出 token 延迟（decode@pastKV512）</td><td>89.3 ms</td><td class="win">32.34 ms</td><td>50.65 ms</td></tr>
+    <tr><td><b>输出 TPS</b>（decode 吞吐）</td><td>11.2</td><td class="win">30.9</td><td>19.7</td></tr>
+    <tr><td><b>Prefill 吞吐</b></td><td>1718 TPS</td><td>1701 TPS</td><td class="win">3252 TPS</td></tr>
+    <tr><td><b>E2E 延迟</b>（512-in + 128-out）</td><td>≈ 11.7 s</td><td class="win">≈ 4.61 s</td><td>≈ 6.87 s</td></tr>
+    <tr><td>能效 prefill / decode（tokens·J⁻¹）</td><td>—</td><td>27.5 / <span class="win">0.82</span></td><td><span class="win">62.8</span> / 0.50</td></tr>
+    <tr><td>引擎显存 (VRAM)</td><td>~16 GB<br>推理可行(dog build 期 OOM)</td><td class="win">~4.6 GB</td><td>~7.9 GB</td></tr>
   </table>
-  <div class="callout warn">
-    <div class="t">FP16 在 Orin 上无法部署（量化是必需，不只是优化）</div>
-    FP16 引擎 ~16 GB，在 29 GB 统一内存的 Orin 上 <strong>TensorRT build 阶段被 OOM 杀死（exit 137）</strong>——故 FP16 的 TTFT/TPS 无法在设备上测得。这本身是结论：<strong>该 8B 模型必须量化才能落地此边缘设备</strong>；INT4(4.6GB)/INT8(7.9GB) 则从容装下。TTFT 随输入长度变化（INT4：128/512/1024-token 输入 ≈ 86 / 301 / 595 ms）。<strong>E2E 看生成长度</strong>：输出 128 token 时 INT4（4.44s）反比 INT8（6.64s）更快——decode 主导。</div>
+  <figure><img src="figures/serving_metrics.png" alt="serving metrics + quantization speedup vs FP16"><figcaption><b>横轴</b>：左=TTFT/TPOT 两指标×三精度，右=三精度<br><b>竖轴</b>：左=延迟(ms)，右=E2E(s)<br><b>结果</b>：decode INT4 比 FP16 快 <strong>2.66×</strong>、INT8 1.70×；prefill INT8 快 1.87×、INT4≈FP16;E2E(512+128) INT4 比 FP16 快 <strong>2.5×</strong>(11.7s→4.6s)<br><b>分析</b>：decode 访存密集→权重越小越快(FP16 16GB→INT4 4.8GB);prefill 计算密集→INT8 原生 int8 核占优、INT4 反量化开销抵消</figcaption></figure>
+  <div class="callout ok">
+    <div class="t">量化 vs FP16 加速比 —— 及"32GB 装不下 FP16"的真相</div>
+    <strong>为何 FP16 在 32GB 的 dog 上跑不起来?</strong> 不是推理装不下（推理仅需 ~16GB 权重 + <strong>8MB 激活</strong>），而是 <strong>TensorRT build（编译）期内存峰值实测 54.8GB</strong>（在 64GB 的 goat 上测得）——远超 dog 的 30GB → build 被 OOM 杀（exit137）。<strong>解法：在 64GB goat 上 build，引擎（同 sm_87 + 同 TRT 10.7）可拷回 dog 直接跑</strong>。⟹ 量化对 8B 边缘部署<strong>既提速（decode 2.66×）又降低部署门槛</strong>。</div>
+  <p style="font-size:12.5px;color:var(--muted)">† FP16 在 orin-goat(64GB) build+跑（dog 无法 build）；INT4/INT8 表中为 orin-dog 数据。两机 INT4/INT8 实测差异 &lt;3%（已跨设备复现），加速比取 goat 同机测量。</p>
   <p style="font-size:13.5px;margin-bottom:2px"><strong>补充 sweep 与多模态（INT4）：</strong></p>
   <ul style="font-size:13.5px;color:var(--muted);margin-top:0">
     <li>Prefill inputLen 128→1024：吞吐 1485→1720 TPS（1024 趋稳），batch=1 已算力饱和、批处理无聚合增益。</li>
@@ -202,7 +203,7 @@ footer a{color:var(--accent)}
   <h3>诚实的边界</h3>
   <ul>
     <li><strong>基准范围</strong>：用 <strong>Cosmos-Reason1-Benchmark 的 robovqa+robofail（n=210，具身机器人推理，非驾驶）</strong>——这是 repo 内<strong>自带视频</strong>的全部；其余 3 子集(agibot/bridgev2/holoassist，共 300)仅有标注、视频需从外部源数据集下载匹配，官方 AV 子集未发布 → 全 510 需外部视频流水线(future work)。<strong>无 Cosmos-Reason2-Benchmark（不存在），故用同族的 R1-Benchmark 评测 R2 模型（标准做法）</strong>。视频按 6 帧@448 采样（非官方原生协议，绝对分不追求复现论文；三精度同帧→掉点可比）。</li>
-    <li><strong>FP16 无设备端性能基线</strong>：FP16 引擎在 Orin build 期 OOM（16GB &gt; 显存余量），故无法给出 Orin 上的 FP16 TTFT/TPS；"量化 vs FP16 加速比"以显存可行性（FP16 装不下）替代呈现。</li>
+    <li><strong>FP16 基线跨设备取得</strong>：FP16 引擎在 32GB dog build 期 OOM（峰值 55GB），改在 <strong>64GB orin-goat</strong> build+跑得到 TTFT/TPOT；INT4/INT8 两机差异 &lt;3%（已交叉复现），故加速比取 goat 同机测量，代表性良好。</li>
     <li><strong>无轨迹预测</strong>：ADE/FDE vs CVM 属于 VLA 轨道（Alpamayo-R1-10B FP16），大工程，暂缓。</li>
     <li><strong>校准集</strong>：默认通用新闻(cnn_dailymail 512)。<strong>已做域内校准消融</strong>：域内小集反而使 INT8 暴跌(+244% ppl)→ 覆盖度/质量比域匹配更关键，默认选择得验证(消融含"域 vs 规模"confound)。</li>
     <li>量化标的从 Alpamayo 改为 Cosmos，因 Alpamayo 只支持 FP16、不能量化（工具硬约束）。</li>

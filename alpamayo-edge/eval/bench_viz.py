@@ -118,31 +118,31 @@ ax.set_title("Task accuracy per subset + overall (Cosmos-Reason1-Benchmark, MC)\
 ax.margins(y=0.12)
 fig.tight_layout(); fig.savefig(os.path.join(OUT, "benchmark_accuracy.png")); plt.close(fig)
 
-# ---- Fig 7: standardized serving metrics (TTFT vs input length; E2E breakdown) ----
-fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.3))
-# left: TTFT (=prefill) vs input length. INT4 sweep measured; INT8 has 512 point.
-inlen = [128, 256, 512, 1024]
-ttft4 = [86, 157, 301, 595]   # INT4: inputLen/prefill-TPS *1000 (from measured sweep)
-a1.plot(inlen, ttft4, "-o", color=C4, lw=2, ms=6, label="INT4 (AWQ)")
-a1.plot([512], [157.45], "s", color=C8, ms=9, label="INT8 @512")
-for x, y in zip(inlen, ttft4):
-    a1.annotate(f"{y}", (x, y), xytext=(0, 7), textcoords="offset points", ha="center", fontsize=9)
-a1.set_xlabel("input length (tokens)"); a1.set_ylabel("TTFT = time-to-first-token (ms)")
-a1.set_title("TTFT vs input length", fontweight="bold"); a1.legend(fontsize=9); a1.margins(y=0.2)
-# right: E2E breakdown for a 512-in + 128-out request (stacked prefill + decode)
-labels = ["INT4 (AWQ)", "INT8 (SmoothQuant)"]
-prefill_s = [0.301, 0.157]; decode_s = [128*0.03234, 128*0.05065]
-x = np.arange(2); w = 0.5
-a2.bar(x, prefill_s, w, label="TTFT (prefill 512)", color="#93c5fd")
-a2.bar(x, decode_s, w, bottom=prefill_s, label="decode 128×TPOT", color=[C4, C8])
-for i in range(2):
-    tot = prefill_s[i]+decode_s[i]
-    a2.annotate(f"{tot:.2f}s", (x[i], tot), ha="center", va="bottom", fontsize=11, fontweight="bold",
-                xytext=(0, 2), textcoords="offset points")
-a2.set_xticks(x); a2.set_xticklabels(labels); a2.set_ylabel("E2E latency (s)")
-a2.set_title("E2E (512-in + 128-out): decode dominates -> INT4 wins", fontweight="bold", fontsize=10.5)
-a2.legend(fontsize=9); a2.margins(y=0.18)
-fig.suptitle("Standardized serving metrics: TTFT / TPOT / E2E  (Orin MAXN batch=1; FP16 N/A: build OOM)", fontsize=11)
+# ---- Fig 7: serving metrics + quantization speedup vs FP16 (all on goat, same device) ----
+CF = "#16a34a"  # FP16 green
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.4))
+# left: TTFT (prefill) & TPOT (decode) grouped bars for FP16/INT8/INT4
+metrics = ["TTFT\n(prefill 512)", "TPOT\n(decode /token)"]
+fp16 = [298.1, 89.27]; int8 = [159.3, 52.43]; int4 = [304.6, 33.62]
+x = np.arange(2); w = 0.26
+for off, vals, c, lab in [(-w, fp16, CF, "FP16"), (0, int8, C8, "INT8 (SQ)"), (w, int4, C4, "INT4 (AWQ)")]:
+    bars = a1.bar(x + off, vals, w, color=c, label=lab)
+    for r, v in zip(bars, vals):
+        a1.annotate(f"{v:.0f}", (r.get_x()+r.get_width()/2, v), ha="center", va="bottom",
+                    fontsize=8.5, xytext=(0, 2), textcoords="offset points")
+a1.set_xticks(x); a1.set_xticklabels(metrics); a1.set_ylabel("latency (ms)")
+a1.set_title("TTFT / TPOT vs FP16\ndecode: INT4 2.66× / INT8 1.70× faster than FP16", fontweight="bold", fontsize=10)
+a1.legend(fontsize=9, ncol=3, loc="upper center"); a1.margins(y=0.18)
+# right: E2E (512-in + 128-out) for the three
+labels = ["FP16", "INT8 (SQ)", "INT4 (AWQ)"]; e2e = [11.72, 6.87, 4.61]; cols = [CF, C8, C4]
+b = a2.bar(labels, e2e, color=cols, width=0.6)
+for r, v, sp in zip(b, e2e, ["1.0× (ref)", "1.7×", "2.5×"]):
+    a2.annotate(f"{v:.1f}s\n{sp}", (r.get_x()+r.get_width()/2, v), ha="center", va="bottom",
+                fontsize=10, fontweight="bold", xytext=(0, 2), textcoords="offset points")
+a2.set_ylabel("E2E latency (s)"); a2.set_ylim(0, 14)
+a2.set_title("E2E (512-in + 128-out): quantization → up to 2.5× faster", fontweight="bold", fontsize=10)
+a2.margins(y=0.15)
+fig.suptitle("Serving metrics & quantization speedup vs FP16  (orin-goat 64GB, MAXN, batch=1; INT4/INT8 within 3% of orin-dog)", fontsize=10.5)
 fig.tight_layout(rect=(0,0,1,0.95)); fig.savefig(os.path.join(OUT, "serving_metrics.png")); plt.close(fig)
 
 print("wrote:", ", ".join(sorted(os.listdir(OUT))))

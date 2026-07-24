@@ -1,0 +1,57 @@
+{
+  "device": "orin-goat (AGX Orin 64GB, sm_87, MAXN)",
+  "note": "all 3 engines built+benched on goat (same device -> fair speedup); FP16 build impossible on 32GB dog",
+  "batch1_inputLen512_pastKV512": {
+    "fp16": {
+      "ttft_ms": 298.1,
+      "tpot_ms": 89.27,
+      "out_tps": 11.2
+    },
+    "int8": {
+      "ttft_ms": 159.3,
+      "tpot_ms": 52.43,
+      "out_tps": 19.1
+    },
+    "int4": {
+      "ttft_ms": 304.6,
+      "tpot_ms": 33.62,
+      "out_tps": 29.7
+    }
+  },
+  "speedup_vs_fp16": {
+    "prefill_TTFT": {
+      "int8": 1.87,
+      "int4": 0.98
+    },
+    "decode_TPOT": {
+      "int8": 1.7,
+      "int4": 2.66
+    }
+  },
+  "e2e_512in_128out_s": {
+    "fp16": 11.72,
+    "int8": 6.87,
+    "int4": 4.61
+  },
+  "fp16_build_peak_ram_gb": 54.8,
+  "fp16_engine_gb": 15.15,
+  "cross_device_repro": {
+    "int4_dog": [
+      300.98,
+      32.34
+    ],
+    "int4_goat": [
+      304.6,
+      33.62
+    ],
+    "int8_dog": [
+      157.45,
+      50.65
+    ],
+    "int8_goat": [
+      159.3,
+      52.43
+    ],
+    "agreement": "<3%"
+  }
+}
