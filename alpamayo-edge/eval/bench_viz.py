@@ -96,8 +96,8 @@ for r, v, pc in zip(b, sz, ["100%", "55%", "32%"]):
 ax.axhline(30, color="#e74c3c", lw=1.4, ls="--")
 ax.annotate("orin-dog unified mem ~30GB", (2.35, 30), color="#e74c3c", fontsize=8.5, va="bottom", ha="right")
 ax.set_ylabel("LLM engine size (GB)"); ax.set_ylim(0, 34)
-ax.set_title("Engine footprint: INT4 = 32% of FP16, INT8 = 55%\n(all fit 30GB for INFERENCE; FP16 BUILD needs ~55GB)",
-             fontweight="bold", fontsize=10.5)
+ax.set_title("Engine footprint: INT4 = 32% of FP16, INT8 = 55%\n(INT4/INT8 run on 32GB dog; FP16 15GB OOMs at LOAD too, build needs 55GB)",
+             fontweight="bold", fontsize=10)
 fig.tight_layout(); fig.savefig(os.path.join(OUT, "footprint.png")); plt.close(fig)
 
 # ---- Fig 5: quantization accuracy drop-off vs FP16 (eval/accuracy/) ----

@@ -11,15 +11,15 @@ description: 把 HuggingFace LLM/VLM 用 NVIDIA TensorRT-Edge-LLM 量化(INT4 AW
 
 ## 推荐部署架构（三层分工）—— build 与 inference 分离
 
-**核心规律：TensorRT 的 build(编译) 远比 inference(执行) 吃内存**（build 峰值 ≈ 权重 ×2–3；实测 FP16 build 峰 **54.8GB**，而 FP16 推理仅 **~17GB**、运行时激活仅 **8MB**）。故按机器资源分工：
+**核心规律：TensorRT 的 build(编译) 远比 inference(执行) 吃内存**（build 峰值 ≈ 权重 ×2–3；实测 FP16 build 峰 **54.8GB**，运行时激活仅 8MB）。**但"推理更省"仍受总内存约束**：载入 N GB 引擎时，其文件页缓存 + N GB 设备分配 ≈ 2N，故 **15GB 的 FP16 引擎在 32GB dog 上 deserialize 即 OOM**（实测）。⟹ 按机器资源分工：
 
 | 阶段 | 机器 | 为什么 |
 |---|---|---|
 | ① 量化 / 导出 ONNX | **Kaggle 2×T4（免费，一次性）** | 需下门控模型(16GB)+校准计算；本地/边缘装不下 |
 | ② build 引擎（尤其 FP16） | **大内存 Orin（goat 64GB）** | FP16 build 峰 ~55GB，32GB dog 会 **OOM(exit137)**；INT4/INT8(峰<30GB)哪台都行 |
-| ③ 跑推理 / 服务 | **目标 Orin（dog 32GB）** | 推理只需 引擎+KV+8MB 激活（FP16≈17GB<30GB），从容 |
+| ③ 跑推理 / 服务 | **目标 Orin（dog 32GB）** | 跑**量化引擎**(INT4 4.8/INT8 8.3GB)从容；**FP16(15GB) 连载入都 OOM**（引擎+其文件页缓存≈30GB 到顶）→ FP16 留 goat |
 
-**引擎可移植的前提（务必核对，否则不通用）**：build 机与 run 机需 **① 同 GPU 架构(都 sm_87) ② 同 TensorRT 版本(都 10.7.0.23) ③ 同 TRTEdge/插件 build(同 commit)**。满足则 goat build 的 `.engine` 直接拷到 dog 跑（实测 INT4/INT8 两机 <3%）；甚至 goat 编好的**二进制+插件**可直接拷到另一台同栈机免重编。任一不符 → 必须在目标机 build（FP16 则无解，除非目标机内存够）。
+**引擎可移植的前提（务必核对，否则不通用）**：build 机与 run 机需 **① 同 GPU 架构(都 sm_87) ② 同 TensorRT 版本(都 10.7.0.23) ③ 同 TRTEdge/插件 build(同 commit)**。满足则 goat build 的 `.engine` 拷到 dog 跑（实测 INT4/INT8 两机 <3%；goat 编好的**二进制+插件**也可直拷免重编）。**但引擎必须小到能载入目标机**：15GB 的 FP16 引擎在 32GB dog 上 deserialize 即 OOM(引擎+文件页缓存≈30GB)——所以 dog 只跑 INT4/INT8，FP16 留 64GB goat。任一不符 → 必须在目标机 build（FP16 则无解，除非目标机内存够）。
 
 **存储**：build 机是**临时工**——拉 ONNX → build → 导出 `.engine` → 即清理，别长期囤大件（goat 盘紧）。长期产物（ONNX/引擎/日志）归档到有空间处（云 / dog / 本地）。
 
