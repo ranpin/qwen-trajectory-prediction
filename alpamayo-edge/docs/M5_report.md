@@ -24,7 +24,7 @@
 > **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br>**竖轴**：体积(GB)<br>**结果**：INT4 比 INT8 约省 42%<br>**分析**：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存
 
 ![serving metrics](figures/serving_metrics.png)
-> **横轴**：左=输入长度(token)，右=精度<br>**竖轴**：左=TTFT(ms)，右=E2E(s，prefill+decode 堆叠)<br>**结果**：TTFT 随输入近线性(INT4 86→595ms@128→1024)；512-in+128-out E2E INT4 4.44s < INT8 6.64s<br>**分析**：生成越长 decode(TPOT) 越主导 → INT4 的 E2E 更优；FP16 因 OOM 无设备端数据
+> **横轴**：左=TTFT/TPOT×三精度，右=三精度<br>**竖轴**：左=延迟(ms)，右=E2E(s)<br>**结果**：decode INT4 比 FP16 快 **2.66×**、INT8 1.70×；E2E(512+128) 11.7→4.6s(2.5×)<br>**分析**：FP16 基线经 64GB goat 补全(dog build 期 OOM,峰值 54.8GB);引擎同 sm_87 可拷回 dog 跑。跨设备 INT4/INT8 <3% 复现
 
 ![benchmark accuracy](figures/benchmark_accuracy.png)
 > **横轴**：三种精度(FP16/INT8/INT4)<br>**竖轴**：真实基准 MC 任务正确率 %(绿虚线=FP16 76.2%)<br>**结果**：n=210(robovqa+robofail) FP16 76.2%、INT8 75.2%、INT4 73.8%（误差棒=Wilson 95%CI）<br>**分析**：CI 重叠、McNemar p>0.4 → 差异**统计不显著**，稳妥结论=**量化无显著任务正确率损失**。**另:FP16 引擎在 Orin build 期 OOM(16GB>29GB)→ 量化是部署必需**。
@@ -66,8 +66,8 @@
 ## 简历 bullet（实测数）
 
 - 用 NVIDIA TensorRT-Edge-LLM 将 8B 多模态大模型 (Cosmos-Reason2) 量化为 INT4/INT8 并部署至 Jetson Orin，
-  实测标准服务指标 **INT4 decode 30.9 TPS / TTFT 301ms @ ~40W**、**INT8 prefill 3252 TPS**；在**官方 Cosmos-Reason1-Benchmark**
-  上量化**无显著任务正确率损失**(n=210，McNemar p>0.4)；并发现 **FP16(16GB) 在 Orin OOM 无法部署→量化是落地必需**。
+  实测标准服务指标(TTFT/TPOT/TPS/E2E)，**量化 decode 比 FP16 快 2.66×(INT4)/1.70×(INT8)、E2E 2.5×**；在**官方 Cosmos-Reason1-Benchmark(n=210)**
+  量化**无显著任务正确率损失**(McNemar p>0.4)；**跨 32GB/64GB 两台 Orin 复现(<3%)**，并定位 FP16 无法在 32GB 机 build(峰值 55GB>30GB)→用 64GB 机 build、引擎拷回部署。
 - 定位并修复 sm_87 上的 FMHA kernel 派发崩溃：从崩溃断言追到 CMake 构建配置（漏传 Orin target flag
   致 sm_87 kernel 被编译排除），非平凡的跨层（运行时 kernel 表 ↔ 编译宏 ↔ CMake）根因排查。
 - 建立 INT4/INT8 在延迟/吞吐/显存/功耗/能效/上下文扩展性/量化掉点的完整边缘画像，沉淀为可复用部署工作流。

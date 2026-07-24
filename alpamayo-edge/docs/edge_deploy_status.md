@@ -81,7 +81,7 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 
 视频按 6 帧(≤448px)采样作多图，FP16(云端 PyTorch)/INT8/INT4(Orin) **同帧**→掉点严格可比。**统计检验:CI 重叠、McNemar p>0.4 → 差异不显著(n=210；robovqa 88.2%+robofail 63%)** → 稳妥结论是**量化无显著任务正确率损失**(非精确"掉 0.9pts")。方法/口径见 [METHODOLOGY.md](METHODOLOGY.md) §3.3；产物 `eval/accuracy/benchmark/`。robovqa 子集(具身机器人推理，非驾驶)、6帧@448 非官方原生视频协议——绝对分不追求复现论文。
 
-> **FP16 无设备端性能基线**：FP16 引擎(~16GB)在 Orin `llm_build` 期 **OOM 被杀(exit 137)** → FP16 无法在此边缘设备部署；**量化是落地必需**，"加速比"以显存可行性(FP16 装不下、INT4/INT8 从容)替代呈现。
+> **FP16 基线（经 64GB orin-goat 补全）+ 量化加速比**：FP16 引擎在 32GB dog `llm_build` 期 OOM（**峰值实测 54.8GB**，远超 30GB；运行时激活仅 8MB → 是 build 内存墙、非推理）。改在 **64GB orin-goat** build+跑得同机三方：TTFT FP16 298 / INT8 159 / INT4 305 ms，TPOT FP16 89.3 / INT8 52.4 / INT4 33.6 ms。**decode 加速 vs FP16：INT4 2.66×、INT8 1.70×；prefill：INT8 1.87×、INT4≈FP16；E2E(512+128) 11.7→4.6s(2.5×)**。引擎同 sm_87+TRT10.7 可拷回 dog 跑（推理 ~17GB）。跨设备 INT4/INT8 两机 <3% 已复现。详见 `eval/perf/fp16_speedup_goat.json`、[orin_goat_migration_plan.md](orin_goat_migration_plan.md)。
 
 ### 辅：细粒度 perplexity 探针（12 prompt）
 

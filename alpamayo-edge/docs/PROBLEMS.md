@@ -100,7 +100,7 @@
 ### E4. FP16 引擎在 Orin build 期 OOM
 - **现象**：`llm_build` FP16 引擎，进程消失、引擎目录空、detached 重试 **exit 137（SIGKILL/OOM）**。
 - **根因**：FP16 权重 ~16GB + TensorRT builder workspace 峰值 > 29GB 统一内存（lean `--maxKVCacheCapacity` 只降运行时 KV，不降 build 峰值）。
-- **结论（非纯 bug，是发现）**：**FP16 无法在此 Orin 部署 → 量化是落地必需**。故 FP16 无设备端性能基线，用"显存装不下"替代加速比呈现。
+- **实测根因（2026-07-24 用 64GB goat 验证）**：build 峰值 **54.8GB**（>30GB），运行时激活仅 8MB → 纯 **build 内存墙**，非推理。**解法**：在 64GB orin-goat build（成功，peak 54.8GB），引擎同 sm_87+TRT10.7 可拷回 32GB dog 跑（推理 ~17GB）→ 得到 FP16 基线与量化加速比（decode INT4 2.66×）。
 - **教训**：边缘设备上大模型 FP16 常连 build 都过不去；量化不只是提速，而是**能否部署**的前提。
 
 ---

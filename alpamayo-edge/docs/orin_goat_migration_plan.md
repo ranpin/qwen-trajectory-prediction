@@ -1,5 +1,7 @@
 # orin-goat (64GB) 迁移与 FP16 补全计划
 
+> **状态(2026-07-24):已执行完成** ✅ —— FP16 引擎在 goat build 成功(峰值 54.8GB)、测得性能;同机三方加速比 decode INT4 2.66×/INT8 1.70×、E2E 2.5×;跨设备 INT4/INT8 与 dog <3% 复现。结果见 `eval/perf/fp16_speedup_goat.json`。
+
 **目标**:利用 64GB 的 orin-goat 建出 FP16 引擎（32GB 的 orin-dog 因 build 期 OOM 建不出），**补上缺失的 FP16 性能基线（量化 vs FP16 加速比）**，并做**跨设备复现**验证。
 
 ## 前置（需用户操作）

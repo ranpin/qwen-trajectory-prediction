@@ -55,7 +55,7 @@ llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iteratio
 - 引擎构建参数(三版一致,来自 `LLMEngineConfig` 日志):`maxBatch=4 maxInputLen=1024 maxKVCapacity=4096`。
 - **可复现性验证(2026-07-22 重跑 INT4)**:prefill `301.22 ± 0.26 ms / 1699.7 tok·s`、decode `33.93 ± 6.89 ms / 29.5 tok·s`,与首测(300.98 ms/1701、32.34 ms/30.9)在 run-to-run 噪声内一致(decode 单步方差天然大)。
 - **标准服务指标映射**:**TTFT**(首 token 延迟)= prefill E2E(随输入长度变化,INT4 128/512/1024-token ≈ 86/301/595 ms);**TPOT/ITL** = decode 单 token 延迟;**输出 TPS** = 1000/TPOT;**E2E**(512-in+128-out)= TTFT + 128·TPOT(INT4 ≈ 4.44 s、INT8 ≈ 6.64 s)。
-- **FP16 无设备端基线**:FP16 引擎(~16GB)在 Orin `llm_build` 期 **OOM 被杀(exit 137)**,16GB+TRT builder workspace > 29GB 统一内存 → FP16 的 TTFT/TPS 无法在设备上测得;这本身是结论(量化是部署前提),加速比以显存可行性替代。
+- **FP16 基线(64GB orin-goat 补全)**:32GB dog build 期 OOM(**峰值实测 54.8GB**>30GB;运行时激活仅 8MB→是 build 内存墙非推理)。在 64GB goat build+跑:TTFT 298/TPOT 89.3ms。**decode 加速 vs FP16:INT4 2.66×/INT8 1.70×;prefill INT8 1.87×/INT4≈FP16;E2E 2.5×**。引擎同 sm_87+TRT10.7 可拷回 dog(推理~17GB)。跨设备 INT4/INT8 <3% 复现。见 `eval/perf/`。
 
 ### 3.2 功耗 / 能效 —— `tegrastats`
 - 在 bench 运行期采样 `tegrastats`,日志留档 `pw_int4_pre.log`/`pw_int4_dec.log`/`pw_int8_*`。
