@@ -53,5 +53,37 @@
       52.43
     ],
     "agreement": "<3%"
+  },
+  "power_W_goat": {
+    "fp16": {
+      "prefill": 57.1,
+      "decode": 26.7
+    },
+    "int8": {
+      "prefill": 51.8,
+      "decode": 21.2
+    },
+    "int4": {
+      "prefill": 62.6,
+      "decode": 22.7
+    }
+  },
+  "energy_tokJ_goat": {
+    "fp16": {
+      "prefill": 30.1,
+      "decode": 0.42
+    },
+    "int8": {
+      "prefill": 62.0,
+      "decode": 0.9
+    },
+    "int4": {
+      "prefill": 26.9,
+      "decode": 1.31
+    }
+  },
+  "energy_decode_vs_fp16": {
+    "int4": "3.1x",
+    "int8": "2.1x"
   }
 }
