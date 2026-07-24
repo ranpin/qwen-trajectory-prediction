@@ -34,6 +34,9 @@ th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
 .win{color:var(--accent);font-weight:700}
+caption{caption-side:top;text-align:left;font-size:13px;color:var(--text2);margin-bottom:6px;line-height:1.55}
+caption strong{color:var(--accentD)}
+td .sub{display:block;font-size:11.5px;color:var(--muted);font-weight:400;margin-top:2px}
 figure{margin:18px 0;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px}
 figure img{width:100%;height:auto;border-radius:5px;display:block;cursor:zoom-in}
 figcaption{font-size:13.5px;color:var(--muted);margin-top:10px;text-align:left;line-height:1.65}
@@ -81,6 +84,7 @@ footer a{color:var(--accent)}
     <li><strong>选型：decode 看 INT4、prefill 看 INT8</strong>——INT4 decode 快 1.57×/更省电/更省显存(−42%)，INT8 prefill 快 1.9×/能效高 2.3×；生成越长 INT4 的 E2E 越占优。</li>
   </ol>
   <table class="io-table">
+    <caption><strong>表 1</strong>　本项目部署标的与暂缓轨道的输入 / 输出对照。</caption>
     <tr><th>组件</th><th>输入</th><th>输出</th></tr>
     <tr><td><strong>Cosmos-Reason2（本项目部署）</strong></td><td>图像 / 视频帧 + 文字问题</td><td><strong>文字推理</strong>：场景描述、风险判断、行动建议</td></tr>
     <tr><td>Alpamayo-R1 VLA（暂缓轨道）</td><td>多相机图像 + 轨迹历史</td><td>轨迹（6.4s / 64 路点）</td></tr>
@@ -109,26 +113,28 @@ footer a{color:var(--accent)}
 
   <h3>1.1 性能：延迟 / 吞吐 / 显存 / 功耗 / 能效</h3>
   <div class="grid2">
-    <figure><img src="figures/bench_throughput.png" alt="throughput"><figcaption><b>横轴</b>：Prefill(512 输入) / Decode(每 token) 两阶段（三精度含 FP16，goat 同机）<br><b>竖轴</b>：吞吐 TPS (tokens/s)<br><b>结果</b>：prefill INT8 比 FP16 快 1.87×、INT4≈FP16；decode INT4 快 2.66×、INT8 快 1.70×（vs FP16）<br><b>分析</b>：<strong>反常点——INT4 prefill 并不比 FP16 快</strong>：prefill 计算密集，INT4(AWQ) 要先把 4bit 权重<strong>反量化回 fp16</strong> 再算，反量化开销抵消了小权重优势；INT8 用<strong>原生 int8 张量核</strong>直接快 1.87×。decode 访存密集(每步搬全部权重)，权重越小越快 → INT4(4.8GB) 2.66×。⇒ prefill 选 INT8，decode/交互选 INT4。</figcaption></figure>
-    <figure><img src="figures/bench_power_energy.png" alt="power & energy"><figcaption><b>横轴</b>：Prefill / Decode（三精度含 FP16，goat 同机）<br><b>竖轴</b>：左=整机功耗(瓦，三电轨之和)，右=能效 tokens/J (对数轴)<br><b>结果</b>：decode 能效 FP16 0.42 / INT8 0.90 / INT4 1.31（<strong>INT4 比 FP16 高 3.1×</strong>）<br><b>分析</b>：<strong>反常点——INT4 prefill 功耗反而最高(62.6W&gt;FP16 57.1)、prefill 能效反而最低(26.9&lt;FP16 30.1)</strong>：AWQ 反量化让 GPU 在计算密集的 prefill "忙而无增益"→更费电。但 decode 是访存主导，INT4 权重小、每 token 搬运能耗低 → 能效 3.1× FP16。⇒ AWQ 的能效收益全在 decode，不在 prefill。</figcaption></figure>
-    <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption><b>横轴</b>：上下文长度(past-KV token 数，128→4000)<br><b>竖轴</b>：INT4 decode 吞吐 TPS (tokens/s)<br><b>结果</b>：上下文涨 31× 吞吐仅降 9%<br><b>分析</b>：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 ⇒ 适合长对话/长文档</figcaption></figure>
-    <figure><img src="figures/footprint.png" alt="footprint"><figcaption><b>横轴</b>：三精度 LLM 引擎<br><b>竖轴</b>：引擎体积(GB)，红虚线=dog 统一内存 30GB<br><b>结果</b>：FP16 15.2 / INT8 8.3 / INT4 4.8 GB（INT4 = FP16 的 32%）<br><b>分析</b>：INT4/INT8 引擎在 dog 从容运行；<strong>FP16(15GB) 在 dog 连载入都 OOM</strong>(引擎+其文件缓存≈30GB 到顶)、build 更需 55GB → FP16 只在 64GB goat 跑。省下的显存可留给更长 KV cache 或多模型并存。</figcaption></figure>
+    <figure><img src="figures/bench_throughput.png" alt="throughput"><figcaption><b>图 1 · Prefill / Decode 吞吐（TPS）对比</b><br><b>横轴</b>：Prefill(512 输入) / Decode(每 token) 两阶段（三精度含 FP16，goat 同机）<br><b>竖轴</b>：吞吐 TPS (tokens/s)<br><b>结果</b>：prefill INT8 比 FP16 快 1.87×、INT4≈FP16；decode INT4 快 2.66×、INT8 快 1.70×（vs FP16）<br><b>分析</b>：<strong>反常点——INT4 prefill 并不比 FP16 快</strong>：prefill 计算密集，INT4(AWQ) 要先把 4bit 权重<strong>反量化回 fp16</strong> 再算，反量化开销抵消了小权重优势；INT8 用<strong>原生 int8 张量核</strong>直接快 1.87×。decode 访存密集(每步搬全部权重)，权重越小越快 → INT4(4.8GB) 2.66×。⇒ prefill 选 INT8，decode/交互选 INT4。</figcaption></figure>
+    <figure><img src="figures/bench_power_energy.png" alt="power & energy"><figcaption><b>图 2 · 功耗与能效（三精度，goat 同机）</b><br><b>横轴</b>：Prefill / Decode（三精度含 FP16，goat 同机）<br><b>竖轴</b>：左=整机功耗(瓦，三电轨之和)，右=能效 tokens/J (对数轴)<br><b>结果</b>：decode 能效 FP16 0.42 / INT8 0.90 / INT4 1.31（<strong>INT4 比 FP16 高 3.1×</strong>）<br><b>分析</b>：<strong>反常点——INT4 prefill 功耗反而最高(62.6W&gt;FP16 57.1)、prefill 能效反而最低(26.9&lt;FP16 30.1)</strong>：AWQ 反量化让 GPU 在计算密集的 prefill "忙而无增益"→更费电。但 decode 是访存主导，INT4 权重小、每 token 搬运能耗低 → 能效 3.1× FP16。⇒ AWQ 的能效收益全在 decode，不在 prefill。</figcaption></figure>
+    <figure><img src="figures/decode_scaling.png" alt="decode scaling"><figcaption><b>图 3 · INT4 decode 吞吐随上下文长度的扩展性</b><br><b>横轴</b>：上下文长度(past-KV token 数，128→4000)<br><b>竖轴</b>：INT4 decode 吞吐 TPS (tokens/s)<br><b>结果</b>：上下文涨 31× 吞吐仅降 9%<br><b>分析</b>：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 ⇒ 适合长对话/长文档</figcaption></figure>
+    <figure><img src="figures/footprint.png" alt="footprint"><figcaption><b>图 4 · 三精度 LLM 引擎体积</b><br><b>横轴</b>：三精度 LLM 引擎<br><b>竖轴</b>：引擎体积(GB)，红虚线=dog 统一内存 30GB<br><b>结果</b>：FP16 15.2 / INT8 8.3 / INT4 4.8 GB（INT4 = FP16 的 32%）<br><b>分析</b>：INT4/INT8 引擎在 dog 从容运行；<strong>FP16(15GB) 在 dog 连载入都 OOM</strong>(引擎+其文件缓存≈30GB 到顶)、build 更需 55GB → FP16 只在 64GB goat 跑。省下的显存可留给更长 KV cache 或多模型并存。</figcaption></figure>
   </div>
   <table>
-    <tr><th>标准服务指标（Orin sm_87 / CUDA 12.6.11 / TRT 10.7 / MAXN, batch=1）</th><th>FP16 †</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
-    <tr><td><b>TTFT</b> 首 token 延迟（512-token 输入 prefill）</td><td>298.1 ms</td><td>300.98 ms</td><td class="win">157.45 ms</td></tr>
-    <tr><td><b>TPOT / ITL</b> 每输出 token 延迟（decode@pastKV512）</td><td>89.3 ms</td><td class="win">32.34 ms</td><td>50.65 ms</td></tr>
-    <tr><td><b>输出 TPS</b>（decode 吞吐）</td><td>11.2</td><td class="win">30.9</td><td>19.7</td></tr>
-    <tr><td><b>Prefill 吞吐</b></td><td>1718 TPS</td><td>1701 TPS</td><td class="win">3252 TPS</td></tr>
-    <tr><td><b>E2E 延迟</b>（512-in + 128-out）</td><td>≈ 11.7 s</td><td class="win">≈ 4.61 s</td><td>≈ 6.87 s</td></tr>
-    <tr><td>能效 prefill / decode（tokens·J⁻¹）</td><td>—</td><td>27.5 / <span class="win">0.82</span></td><td><span class="win">62.8</span> / 0.50</td></tr>
-    <tr><td>引擎显存 (VRAM)</td><td>~15 GB<br>dog build+载入均 OOM</td><td class="win">~4.6 GB</td><td>~7.9 GB</td></tr>
+    <caption><strong>表 2</strong>　标准服务指标（Jetson Orin，sm_87 / CUDA 12.6.11 / TensorRT 10.7 / MAXN，batch = 1）。单位标注于「指标」列，数值取实测（延迟保留 1 位小数、吞吐取整）；延迟与吞吐 INT4 / INT8 于 orin-dog、FP16 † 于 orin-goat 实测；能效两机分列（dog / goat）。同一指标最优精度以<span class="win">蓝色加粗</span>标示。</caption>
+    <tr><th>指标（单位）</th><th>FP16 †</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
+    <tr><td><b>TTFT</b> 首 token 延迟（ms）<span class="sub">512-token 输入 prefill</span></td><td>298.1</td><td>301.0</td><td class="win">157.5</td></tr>
+    <tr><td><b>TPOT / ITL</b> 每输出 token 延迟（ms）<span class="sub">decode @ pastKV 512</span></td><td>89.3</td><td class="win">32.3</td><td>50.7</td></tr>
+    <tr><td><b>输出吞吐</b> · decode（tok·s⁻¹）</td><td>11.2</td><td class="win">30.9</td><td>19.7</td></tr>
+    <tr><td><b>Prefill 吞吐</b>（tok·s⁻¹）</td><td>1718</td><td>1701</td><td class="win">3252</td></tr>
+    <tr><td><b>E2E 延迟</b>（s）<span class="sub">512-in + 128-out</span></td><td>11.7</td><td class="win">4.6</td><td>6.9</td></tr>
+    <tr><td>Prefill 能效（tok·J⁻¹）<span class="sub">dog / goat</span></td><td>— / 30.1</td><td>27.5 / 26.9</td><td class="win">62.8 / 62.0</td></tr>
+    <tr><td>Decode 能效（tok·J⁻¹）<span class="sub">dog / goat</span></td><td>— / 0.42</td><td class="win">0.82 / 1.31</td><td>0.50 / 0.90</td></tr>
+    <tr><td>引擎体积（GB）<span class="sub">加载后显存占用 ≈ 此值（Orin 统一内存）</span></td><td>15.2 <span class="sub">dog build / 载入均 OOM</span></td><td class="win">4.8</td><td>8.3</td></tr>
   </table>
-  <figure><img src="figures/serving_metrics.png" alt="serving metrics + quantization speedup vs FP16"><figcaption><b>横轴</b>：左=TTFT/TPOT 两指标×三精度，右=三精度<br><b>竖轴</b>：左=延迟(ms)，右=E2E(s)<br><b>结果</b>：decode INT4 比 FP16 快 <strong>2.66×</strong>、INT8 1.70×；prefill INT8 快 1.87×、INT4≈FP16;E2E(512+128) INT4 比 FP16 快 <strong>2.5×</strong>(11.7s→4.6s)<br><b>分析</b>：decode 访存密集→权重越小越快(FP16 16GB→INT4 4.8GB);prefill 计算密集→INT8 原生 int8 核占优、INT4 反量化开销抵消</figcaption></figure>
+  <figure><img src="figures/serving_metrics.png" alt="serving metrics + quantization speedup vs FP16"><figcaption><b>图 5 · 标准服务指标与相对 FP16 的加速比</b><br><b>横轴</b>：左=TTFT/TPOT 两指标×三精度，右=三精度<br><b>竖轴</b>：左=延迟(ms)，右=E2E(s)<br><b>结果</b>：decode INT4 比 FP16 快 <strong>2.66×</strong>、INT8 1.70×；prefill INT8 快 1.87×、INT4≈FP16;E2E(512+128) INT4 比 FP16 快 <strong>2.5×</strong>(11.7s→4.6s)<br><b>分析</b>：decode 访存密集→权重越小越快(FP16 16GB→INT4 4.8GB);prefill 计算密集→INT8 原生 int8 核占优、INT4 反量化开销抵消</figcaption></figure>
   <div class="callout ok">
     <div class="t">量化 vs FP16 加速比 —— 及"32GB 装不下 FP16"的真相</div>
     <strong>为何 FP16 在 32GB 的 dog 上跑不起来?</strong> 不是推理装不下（推理仅需 ~16GB 权重 + <strong>8MB 激活</strong>），而是 <strong>TensorRT build（编译）期内存峰值实测 54.8GB</strong>（在 64GB 的 goat 上测得）——远超 dog 的 30GB → build 被 OOM 杀（exit137）。<strong>实测</strong>：FP16 引擎(15GB)在 32GB dog 上<strong>连载入都 OOM</strong>（deserialize 申请 15GB 时仅 ~11GB free，引擎文件自身页缓存把内存吃到 30GB 边缘）→ <strong>FP16 在 32GB 机 build 和 run 都不可行</strong>。故 FP16 只在 64GB goat 上跑(作参考基线)，dog 部署 INT4/INT8。⟹ 量化对 8B 边缘部署<strong>既提速(decode 2.66×)又是唯一可部署方案</strong>。</div>
-  <p style="font-size:12.5px;color:var(--muted)">† FP16 在 orin-goat(64GB) build+跑（dog 无法 build）；INT4/INT8 表中为 orin-dog 数据。两机 INT4/INT8 实测差异 &lt;3%（已跨设备复现），加速比取 goat 同机测量。</p>
+  <p style="font-size:12.5px;color:var(--muted)">† FP16 在 orin-goat（64 GB）build + 跑（dog 无法 build）；延迟 / 吞吐的 INT4 / INT8 为 orin-dog 数据，两机 INT4 / INT8 实测差异 &lt;3%（已跨设备复现），加速比取 goat 同机测量。<strong>能效 tok·J⁻¹ 两机分列（dog / goat）</strong>：整机功耗基线随设备不同，跨机差异大于延迟的 3%（如 decode INT4 dog 0.82 vs goat 1.31），故不合并；图 2 为 goat 同机三方，与本表 goat 列一致。</p>
   <p style="font-size:13.5px;margin-bottom:2px"><strong>补充 sweep 与多模态（INT4）：</strong></p>
   <ul style="font-size:13.5px;color:var(--muted);margin-top:0">
     <li>Prefill inputLen 128→1024：吞吐 1485→1720 TPS（1024 趋稳），batch=1 已算力饱和、批处理无聚合增益。</li>
@@ -138,8 +144,9 @@ footer a{color:var(--accent)}
 
   <h3>1.2 精度：真实基准任务正确率（vs FP16）</h3>
   <p>在<strong>官方 <a href="https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark" target="_blank" style="color:var(--accent)">Cosmos-Reason1-Benchmark</a>（robovqa 子集，110 道选择题带标准答案）</strong>上实测<strong>任务正确率</strong>——具体场景 + ground truth，效果指标有实际意义。视频按 6 帧（≤448px）采样作多图，FP16/INT8/INT4 用同一批帧，掉点严格可比。</p>
-  <figure><img src="figures/benchmark_accuracy.png" alt="benchmark task accuracy"><figcaption><b>横轴</b>：三种精度（FP16 参考 / INT8 / INT4）<br><b>竖轴</b>：多选题任务正确率 %（误差棒=Wilson 95% 置信区间，绿虚线=FP16 76.2%）<br><b>结果</b>：n=210（robovqa 88.2% + 更难的 robofail 63%）FP16 76.2%、INT8 75.2%、INT4 73.8%；三者 <strong>CI 重叠、McNemar p&gt;0.4 → 差异统计不显著</strong><br><b>分析</b>：即使扩到 210、加入更难子集，量化仍<strong>无显著任务正确率损失</strong>，且分辨不出 INT4/INT8。二选一 MC 使 CI 仍 ±5.7；要更细分辨需上千样本或更难多选题（其余子集需外部视频，见边界）</figcaption></figure>
+  <figure><img src="figures/benchmark_accuracy.png" alt="benchmark task accuracy"><figcaption><b>图 6 · 基准任务正确率（Cosmos-Reason1-Benchmark）</b><br><b>横轴</b>：三种精度（FP16 参考 / INT8 / INT4）<br><b>竖轴</b>：多选题任务正确率 %（误差棒=Wilson 95% 置信区间，绿虚线=FP16 76.2%）<br><b>结果</b>：n=210（robovqa 88.2% + 更难的 robofail 63%）FP16 76.2%、INT8 75.2%、INT4 73.8%；三者 <strong>CI 重叠、McNemar p&gt;0.4 → 差异统计不显著</strong><br><b>分析</b>：即使扩到 210、加入更难子集，量化仍<strong>无显著任务正确率损失</strong>，且分辨不出 INT4/INT8。二选一 MC 使 CI 仍 ±5.7；要更细分辨需上千样本或更难多选题（其余子集需外部视频，见边界）</figcaption></figure>
   <table>
+    <caption><strong>表 3</strong>　各基准子集任务正确率与统计检验（n = 210，误差以 Wilson 95% CI、显著性以 McNemar 检验）。</caption>
     <tr><th>子集 / 任务正确率</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
     <tr><td>robovqa（n=110，较易）</td><td>88.2%</td><td>87.3%</td><td>87.3%</td></tr>
     <tr><td>robofail（n=100，更难）</td><td>63.0%</td><td>59.0%</td><td>62.0%</td></tr>
@@ -149,8 +156,9 @@ footer a{color:var(--accent)}
 
   <h3>1.3 精度（辅助）：细粒度 perplexity 探针</h3>
   <p style="font-size:13.5px;color:var(--muted)">补充一个更细粒度的相对指标：12 条驾驶/推理 prompt 上，用 FP16 模型对量化输出做 teacher-forced perplexity（比 MC 正确率更敏感，能区分 INT4/INT8）。</p>
-  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><b>横轴</b>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)<br><b>竖轴</b>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数<br><b>结果</b>：INT4(AWQ) 掉点 +9.8% 显著小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久<br><b>分析</b>：INT4(W4A16 纯权重、激活保 16bit)对校准质量更鲁棒；INT8(W8A8)连激活也量化更敏感 → 掉点更大（校准集消融见"思考讨论"：域内小集反而更差，覆盖度比域匹配更关键）</figcaption></figure>
+  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><b>图 7 · 相对 FP16 的 perplexity 掉点与一致前缀</b><br><b>横轴</b>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)<br><b>竖轴</b>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数<br><b>结果</b>：INT4(AWQ) 掉点 +9.8% 显著小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久<br><b>分析</b>：INT4(W4A16 纯权重、激活保 16bit)对校准质量更鲁棒；INT8(W8A8)连激活也量化更敏感 → 掉点更大（校准集消融见"思考讨论"：域内小集反而更差，覆盖度比域匹配更关键）</figcaption></figure>
   <table>
+    <caption><strong>表 4</strong>　各精度 perplexity 与相对 FP16 的一致前缀（12 条 prompt，teacher-forced，相对口径）。</caption>
     <tr><th>指标</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
     <tr><td>平均 perplexity（越低越好）</td><td>1.237</td><td class="win">1.359</td><td>1.460</td></tr>
     <tr><td>PPL 相对 FP16 增幅</td><td>—</td><td class="win">+9.8%</td><td>+18.1%</td></tr>
@@ -160,7 +168,7 @@ footer a{color:var(--accent)}
   <h2>二、方法细节（可复现）</h2>
 
   <h3>2.1 方法总览（端到端流程 · 为什么这么设计）</h3>
-  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center">端到端流程：源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
+  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 8 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
   <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
   <p style="margin-bottom:4px"><strong>为什么这么设计（关键选择的理由）：</strong></p>
   <ol style="margin-top:0">
