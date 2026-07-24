@@ -101,6 +101,7 @@ cd /home/vision/TensorRT-Edge-LLM
 
 ## 通用纪律
 
+- **边缘内存有两道坎，别只算"权重能装下"**：① **build 峰 ≈ 权重×2–3**（8B FP16 实测 54.8GB）；② **load 峰 ≈ 引擎×2**（deserialize 时"引擎文件页缓存 + 设备分配"叠加——15GB 的 FP16 引擎在 30GB 机 load 即 OOM，即使权重本身 <30GB）。选目标机/判断可行性按这两个峰值算，不是按稳态权重。大模型→在大内存机 build+load，小机只跑小引擎(量化)。
 - 长命令（build/download）后台跑 + Monitor 盯**成功和失败两类信号**（`Built target`/`error:`/`OOM`），别只盯成功。
 - 一次性预判所有可能失败点（完整性、size、内存、路径），别逐个错误反应式处理。
 - 推代码前扫明文凭据（`hf_...`/AKIA/BEGIN/password），token 只走环境变量。
