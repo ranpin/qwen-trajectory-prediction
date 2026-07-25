@@ -57,7 +57,7 @@ export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so
 
 ## 引擎 / 模型规格（从 Orin 引擎 config 读出）
 
-- 架构：Qwen2.5 系（Cosmos-Reason 主干，Qwen3VL 多模态），`hiddenSize=4096`、`numDecoderLayers=36`、
+- 架构：**Qwen3-VL 系**（Cosmos-Reason2 主干 = 后训练自 Qwen3-VL-8B-Instruct），`hiddenSize=4096`、`numDecoderLayers=36`、
   `numKVHeads=8`（GQA）、`headDim=128`、`vocabSize=151936`。
 - 引擎构建参数：`maxInputLen=1024`、`maxKVCapacity=4096`、`maxBatch=4`。
 - 加载：81 个 I/O 张量；含 3 路 deepstack 视觉嵌入输入（Qwen3VL）。

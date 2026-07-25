@@ -87,7 +87,7 @@ footer a{color:var(--accent)}
     <caption><strong>表 1</strong>　本项目部署标的与暂缓轨道的输入 / 输出对照。</caption>
     <tr><th>组件</th><th>输入</th><th>输出</th></tr>
     <tr><td><strong>Cosmos-Reason2（本项目部署）</strong></td><td>图像 / 视频帧 + 文字问题</td><td><strong>文字推理</strong>：场景描述、风险判断、行动建议</td></tr>
-    <tr><td>Alpamayo-R1 VLA（暂缓轨道）</td><td>多相机图像 + 轨迹历史</td><td>轨迹（6.4s / 64 路点）</td></tr>
+    <tr><td>Alpamayo 1.5 VLA（下游，<strong>正是建在本项目部署的 Cosmos-Reason2-8B 上</strong>；轨迹轨道暂缓）</td><td>多相机图像 + 轨迹历史</td><td>轨迹（扩散式轨迹解码器）</td></tr>
   </table>
   <p style="font-size:13px;color:var(--muted)">实验过程中的问题、根因与解决（含 FMHA 崩溃根因等）单独归档于 <a href="https://github.com/ranpin/qwen-trajectory-prediction/blob/alpamayo-edge/alpamayo-edge/docs/PROBLEMS.md" target="_blank" style="color:var(--accent)">问题记录 PROBLEMS.md</a>，本页不含。</p>
 
@@ -165,10 +165,28 @@ footer a{color:var(--accent)}
     <tr><td>与 FP16 贪心一致前缀占比</td><td>100%</td><td class="win">16.4%</td><td>5.7%</td></tr>
   </table>
 
+  <h3>1.4 Roofline 分析：三个"反常点"的机理</h3>
+  <p>把实测工作点画到 Orin 的 roofline 上，前面三处反常（INT4 prefill 不快于 FP16、INT8 prefill 快 1.87×、INT4 decode 只快 2.66× 而非 3.16×）就都有了定量解释，而非事后叙述。</p>
+  <figure><img src="figures/roofline.png" alt="roofline analysis"><figcaption><b>图 8 · Orin roofline 与实测工作点</b><br><b>横轴</b>：算术强度 AI（每字节的 FLOP/OP 数，对数轴）<br><b>竖轴</b>：可达吞吐（TFLOP/s 或 TOP/s，对数轴）；斜线=带宽屋顶（实线 204.8 GB/s 峰值、点线 150 GB/s 可达），平顶=算力屋顶（INT8 85 TOP/s、FP16 43 TFLOP/s，均为 GPU 稠密值）<br><b>结果</b>：decode 三精度 AI 仅 1.0–3.2，全部贴在带宽斜坡上，实测带宽 <strong>143–170 GB/s = 峰值的 70–83%</strong>；prefill 三精度 AI 512–1616，全部落在各自算力平顶下方 <strong>57–61%</strong>，且 <strong>INT4 贴的是 FP16 顶（25.5 vs FP16 26.0 TFLOP/s）而不是 INT8 顶</strong><br><b>分析</b>：脊点 = 43 TFLOP/s ÷ 204.8 GB/s ≈ <strong>210 FLOP/byte</strong>。decode 的 AI 比脊点低 67–210×⇒ 纯访存墙，故 <strong>INT4 decode 的加速上限就是字节比 15.15/4.8 = 3.16×</strong>，实测 2.66× 的缺口来自带宽效率随权重变小而下降（82.9%→69.7%，固定开销占比上升）。prefill 的 AI 远高于脊点 ⇒ 计算墙：<strong>W4A16 的天花板是 FP16 的 43 TFLOP/s 而非 INT8 的 85 TOP/s</strong>——TensorRT 权重量化会把 INT4 权重<strong>先反量化再做高精度点积</strong>（官方文档明示），所以 INT4 prefill 结构上不可能快过 FP16；INT8(W8A8) 用原生 int8 张量核、天花板翻倍，才有 1.87×。</figcaption></figure>
+  <table>
+    <caption><strong>表 5</strong>　Roofline 量化核对（orin-goat，MAXN，batch = 1）。AI 与可达吞吐均由实测延迟 / 实测引擎字节数推出；算力天花板取 GPU <strong>稠密</strong>峰值（FP16 43 TFLOP/s、INT8 85 TOP/s），<strong>不含 DLA</strong>——NVIDIA 宣传的 275 TOPS 是 GPU 稀疏 170 + 双 DLA 稀疏 105，GPU-only 稠密口径仅为其 31%。</caption>
+    <tr><th>精度</th><th>Decode AI<br><span style="font-weight:400;font-size:12px">FLOP/byte</span></th><th>Decode 实测带宽<br><span style="font-weight:400;font-size:12px">（占 204.8 GB/s 峰值）</span></th><th>Prefill AI<br><span style="font-weight:400;font-size:12px">FLOP/byte</span></th><th>Prefill 实测吞吐<br><span style="font-weight:400;font-size:12px">（占所用天花板）</span></th><th>所用算力天花板</th></tr>
+    <tr><td>FP16</td><td>1.00</td><td>169.7 GB/s（<strong>82.9%</strong>）</td><td>512</td><td>26.0 TFLOP/s（60.5%）</td><td>43 TFLOP/s (FP16)</td></tr>
+    <tr><td>INT8 (SmoothQuant)</td><td>1.83</td><td>158.3 GB/s（77.3%）</td><td>935</td><td>48.7 TOP/s（57.3%）</td><td class="win">85 TOP/s (INT8 原生)</td></tr>
+    <tr><td>INT4 (AWQ)</td><td class="win">3.16</td><td>142.8 GB/s（69.7%）</td><td>1616</td><td>25.5 TFLOP/s（59.2%）</td><td>43 TFLOP/s (<strong>反量化回 FP16</strong>)</td></tr>
+  </table>
+  <div class="callout">
+    <div class="t">Roofline 给出的可执行结论</div>
+    ① <strong>decode 已到硬件上限，没有 kernel 优化空间</strong>——实测带宽已达峰值 70–83%（Orin 实践可达约 150 GB/s），想再快只能继续压字节数（更低位宽 / KV cache 量化 / 稀疏），而不是调 kernel。<br>
+    ② <strong>要让 INT4 的 prefill 也变快，必须换成 W4A8 之类"激活也量化"的方案</strong>，让 GEMM 真正跑在 int8/int4 张量核上；纯权重量化（W4A16）在计算密集阶段结构上无收益。<br>
+    ③ <strong>batch=1 单流下 prefill 已用掉 57–61% 的稠密算力</strong>，剩余空间有限，这与 sweep 观察到的"batch 无聚合增益"一致。<br>
+    ④ 若要动用 275 TOPS 里 DLA 的那 105 TOPS，需把部分子图放到 DLA（TRT `--useDLACore`），但 LLM 的 GEMM/attention 大多不被 DLA 支持——<span style="color:var(--muted)">属推断，未实测</span>。
+  </div>
+
   <h2>二、方法细节（可复现）</h2>
 
   <h3>2.1 方法总览（端到端流程 · 为什么这么设计）</h3>
-  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 8 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
+  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 9 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
   <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
   <p style="margin-bottom:4px"><strong>为什么这么设计（关键选择的理由）：</strong></p>
   <ol style="margin-top:0">
@@ -180,7 +198,7 @@ footer a{color:var(--accent)}
 
   <h3>2.2 方法细节（配置与口径）</h3>
   <ul>
-    <li><strong>模型 / 权重</strong>：<a href="https://huggingface.co/nvidia/Cosmos-Reason2-8B" target="_blank" style="color:var(--accent)"><code>nvidia/Cosmos-Reason2-8B</code></a>（HuggingFace 门控，NVIDIA 预训练；我们<strong>只做推理量化，不训练/微调</strong>；revision 未 pin）。实测架构：36 层 · hidden 4096 · GQA 32/8 头 · RoPE 262144 · vocab 151936（Qwen2.5-VL 系 8B backbone）。</li>
+    <li><strong>模型 / 权重</strong>：<a href="https://huggingface.co/nvidia/Cosmos-Reason2-8B" target="_blank" style="color:var(--accent)"><code>nvidia/Cosmos-Reason2-8B</code></a>（HuggingFace 门控，NVIDIA 预训练；我们<strong>只做推理量化，不训练/微调</strong>；revision 未 pin）。实测架构：36 层 · hidden 4096 · GQA 32/8 头 · RoPE 262144 · vocab 151936（<strong>Qwen3-VL-8B-Instruct</strong> 系 backbone）。</li>
     <li><strong>量化</strong>：NVIDIA ModelOpt 训练后量化(PTQ)。INT4 = AWQ(W4A16)、INT8 = SmoothQuant(W8A8)。<strong>校准集 = 工具默认的 <a href="https://huggingface.co/datasets/cnn_dailymail" target="_blank" style="color:var(--accent)">CNN/DailyMail 3.0.0</a> 前 512 篇 `article`（新闻文本、纯文本路径、非驾驶域</strong>——见讨论 caveat）。视觉塔未量化（保 fp16）。</li>
     <li><strong>数据</strong>：精度评测用<strong>官方 <a href="https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark" target="_blank" style="color:var(--accent)">Cosmos-Reason1-Benchmark</a>（robovqa+robofail，n=210 选择题带标准答案）</strong>——视频采 6 帧(≤448px)作多图、三种精度同帧、算 MC 任务正确率+掉点(带 Wilson CI/McNemar)；另有 12 条手写 prompt 的 perplexity 作细粒度辅助。性能用 llm_bench 合成序列。</li>
     <li><strong>设备 / 框架（实测版本）</strong>：<strong>Jetson AGX Orin Developer Kit</strong>（sm_87，统一内存 29GB，MAXN）· L4T R36.4.4 (JetPack 6.2) · CUDA 12.6.11 · TensorRT 10.7.0.23 · <strong>TensorRT-Edge-LLM v0.9.0</strong>@<code>1ac0f2b</code>。云端量化/参考：Kaggle 2× Tesla T4 (sm_75)。</li>

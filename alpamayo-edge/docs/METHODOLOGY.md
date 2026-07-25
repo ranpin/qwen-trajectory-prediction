@@ -10,7 +10,7 @@
 | 类别 | 型号 / 版本 | 下载地址 / 取证 | 备注 |
 |---|---|---|---|
 | **模型** | `nvidia/Cosmos-Reason2-8B` | https://huggingface.co/nvidia/Cosmos-Reason2-8B （**门控**） | NVIDIA 预训练；**我们只推理量化、不训练**。**revision 未 pin**（导出时下载 main 最新，未记 commit）→ 建议 `from_pretrained(revision=…)` 固定 |
-| 模型架构（实测） | 36 层 · hidden 4096 · 32 Q 头 · **8 KV 头(GQA)** · headDim 128 · RoPE 262144 · vocab 151936 · eos `[151645,151643]` | `edge_int4/…/llm/config.json` + Orin `LLMEngineConfig` 日志 | Qwen2.5-VL 系 8B backbone；`AutoModelForImageTextToText` 可加载 |
+| 模型架构（实测） | 36 层 · hidden 4096 · 32 Q 头 · **8 KV 头(GQA)** · headDim 128 · RoPE 262144 · vocab 151936 · eos `[151645,151643]` | `edge_int4/…/llm/config.json` + Orin `LLMEngineConfig` 日志 | **Qwen3-VL-8B-Instruct** 系 backbone（非 Qwen2.5-VL；CR1 才是 Qwen2.5-VL-7B）；`AutoModelForImageTextToText` 可加载 |
 | **量化校准集** | `cnn_dailymail` config **3.0.0**，split `train` 前 **512** 篇 `article` | https://huggingface.co/datasets/cnn_dailymail | 实测 `quantize.py`；纯文本路径，非驾驶域（见 §4） |
 | **精度探针集** | 12 条手写 prompt（无标注） | `eval/accuracy/prompts_greedy.json`（本仓库） | 非标准 benchmark |
 | **量化/部署框架** | NVIDIA **TensorRT-Edge-LLM v0.9.0** @ `1ac0f2b9…`（2026-07-02） | https://github.com/NVIDIA/TensorRT-Edge-LLM | Orin 建引擎/运行即此 commit（实测 `git rev-parse`）。**Kaggle 量化/导出用 `git clone --depth 1`（main@运行日，未 pin）** → 建议同 pin v0.9.0 |
@@ -26,7 +26,7 @@
 | 模型 | `nvidia/Cosmos-Reason2-8B` | HuggingFace(**门控**仓库,需接受许可+授权 token)：https://huggingface.co/nvidia/Cosmos-Reason2-8B |
 | 权重 | NVIDIA 预训练权重,**我们未做任何训练/微调** | 直接从 HF 下载 fp16 权重（revision 未 pin，见 §0） |
 | 架构(实测 config.json) | 36 decoder 层 · hidden 4096 · 32 注意力头 · **8 KV 头(GQA)** · headDim 128 · RoPE 上下文 262144 · vocab 151936 · eos `[151645,151643]` | `edge_int4/…/llm/config.json` 与 Orin `LLMEngineConfig` 日志一致 |
-| 类型 | 物理场景推理**多模态 VLM**(Qwen2.5-VL 系 backbone),HF `AutoModelForImageTextToText` 可加载 | 加载日志 |
+| 类型 | 物理场景推理**多模态 VLM**(**Qwen3-VL-8B-Instruct** 系 backbone,含 deepstack 视觉嵌入),HF `AutoModelForImageTextToText` 可加载 | 加载日志 |
 
 我们的工作是**推理侧的量化与边缘部署**,不涉及模型训练。因此"训练集"不适用——预训练数据是 NVIDIA 的,不在本项目范围。
 
@@ -54,6 +54,7 @@ llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iteratio
 - **Prefill**:一次并行处理 512 输入 token(计算密集)。**Decode**:在 512 长度 KV 缓存上生成 1 个 token 的单步延迟(访存密集)。
 - 引擎构建参数(三版一致,来自 `LLMEngineConfig` 日志):`maxBatch=4 maxInputLen=1024 maxKVCapacity=4096`。
 - **可复现性验证(2026-07-22 重跑 INT4)**:prefill `301.22 ± 0.26 ms / 1699.7 tok·s`、decode `33.93 ± 6.89 ms / 29.5 tok·s`,与首测(300.98 ms/1701、32.34 ms/30.9)在 run-to-run 噪声内一致(decode 单步方差天然大)。
+- **Roofline 口径（新增）**:硬件天花板取 **GPU 稠密**峰值——AGX Orin(sm_87,MAXN,1301MHz,2048 CUDA/64 TC):**FP16 43 TFLOP/s、INT8 85 TOP/s、峰值 DRAM 带宽 204.8 GB/s**(256-bit LPDDR5 @6400MT/s)。**NVIDIA 宣传的 275 TOPS = GPU 稀疏 INT8 170 + 双 DLA 稀疏 105**,GPU-only 稠密口径仅为其 31%,roofline 必须用后者([规格页](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/)、[Technical Brief](https://www.nvidia.com/content/dam/en-zz/Solutions/gtcf21/jetson-orin/nvidia-jetson-agx-orin-technical-brief.pdf))。实践可达带宽约 150 GB/s(≈73%,社区实测 D2D 151.7 GB/s;NVIDIA 未公布官方 sustained 值,**标注为未经一手来源验证**)。**INT4**:sm_87 ISA 确有 `.s4` mma,但 **TensorRT 权重量化(WoQ)会先反量化再做高精度点积**([官方文档](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/quantized-types-explicit-quantization.html)),故 W4A16 的算力天花板取 FP16 值。模型侧 **矩阵乘参数 7.575 B** 由实测 config 解析推出(36 层×(attn 41.94M + MLP 3×4096×12288) + lm_head),×2 B/参数 = **15.15 GB,与实测 FP16 引擎大小完全吻合**(自校验);脚本 `eval/roofline.py` 打印全部中间量。
 - **标准服务指标映射**:**TTFT**(首 token 延迟)= prefill E2E(随输入长度变化,INT4 128/512/1024-token ≈ 86/301/595 ms);**TPOT/ITL** = decode 单 token 延迟;**输出 TPS** = 1000/TPOT;**E2E**(512-in+128-out)= TTFT + 128·TPOT(INT4 ≈ 4.44 s、INT8 ≈ 6.64 s)。
 - **FP16 基线(64GB orin-goat 补全)**:32GB dog build 期 OOM(**峰值实测 54.8GB**>30GB;运行时激活仅 8MB→是 build 内存墙非推理)。在 64GB goat build+跑:TTFT 298/TPOT 89.3ms。**decode 加速 vs FP16:INT4 2.66×/INT8 1.70×;prefill INT8 1.87×/INT4≈FP16;E2E 2.5×**。**实测 FP16 在 32GB dog 连载入都 OOM**(15GB 引擎+其文件页缓存≈30GB 到顶)→ FP16 build+load 在 32GB 双双不可行,只在 64GB goat 跑;dog 部署 INT4/INT8。跨设备 INT4/INT8 <3% 复现。见 `eval/perf/`。
 

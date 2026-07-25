@@ -37,6 +37,9 @@
 | 交互式 / 单流低延迟 / 省电 / 精度敏感 | **INT4** | decode 30.9 TPS（高 57%）、能效 0.82 tok/J（高 64%）、显存 ~4.6GB（省 42%）、掉点 +9.8% |
 | 批量 / 长上下文 / 高吞吐 | **INT8** | prefill 3252 TPS（快 1.9×）、能效 62.8 tok/J（高 2.3×）、功耗更低（掉点 +18.1%） |
 
+![roofline](figures/roofline.png)
+> **横轴**：算术强度 AI（FLOP/byte，对数）<br>**竖轴**：可达吞吐（对数），斜线=带宽屋顶、平顶=算力屋顶<br>**结果**：decode 三精度贴带宽斜坡（实测 143–170 GB/s = 峰值 70–83%）；prefill 三精度在各自算力顶下 57–61%，INT4 贴 **FP16** 顶<br>**分析**：脊点 210 FLOP/byte；decode AI 1.0–3.2 → 硬访存墙，INT4 加速上限=字节比 3.16×；W4A16 反量化回 fp16 → INT4 prefill 结构上不可能快过 FP16，要提速需 W4A8
+
 （环境：Orin sm_87 / JetPack 6 / CUDA 12.6 / TRT 10.7 / MAXN；batch=1，prefill 512 tok，decode pastKV=512。sweep：decode 上下文涨 31× 仅掉 9%；多模态图像路径端到端验证正确。）
 
 ## 二、方法细节（可复现）
@@ -50,7 +53,7 @@
 
 ### 2.2 方法细节（配置与口径）
 
-- **模型/权重**：`nvidia/Cosmos-Reason2-8B`（HF 门控，NVIDIA 预训练；**只量化不训练**）。36 层·hidden 4096·GQA 32/8·RoPE 262144·vocab 151936。
+- **模型/权重**：`nvidia/Cosmos-Reason2-8B`（HF 门控，NVIDIA 预训练；**只量化不训练**）。36 层·hidden 4096·GQA 32/8·RoPE 262144·vocab 151936（**Qwen3-VL-8B-Instruct** 系 backbone）。
 - **量化**：ModelOpt PTQ。INT4=AWQ(W4A16)、INT8=SmoothQuant(W8A8)。**校准集 = 默认 512 篇 CNN/DailyMail 新闻文本（非驾驶域，重要 caveat）**；视觉塔未量化保 fp16。
 - **数据**：精度 = 12 条手写 prompt（无标注、非 benchmark）；性能 = llm_bench 合成序列。
 - **指标**：延迟/吞吐 = llm_bench E2E（mean±std, warmup3+iter10）；功耗 = tegrastats 三轨和；能效 = TPS÷W；掉点 = FP16 模型 teacher-forced perplexity + token 一致率。
