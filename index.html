@@ -190,14 +190,23 @@ footer a{color:var(--accent)}
     <caption><strong>表 6</strong>　由 kernel 剖析推出的两条优化余量（预测值，<strong>尚未实施</strong>）。字节数由实测 config 解析、并与引擎文件大小自校验到 +0.13%；有效带宽 = 解析字节 ÷ 实测 kernel 耗时（Nsight Compute 硬件计数器需 root，本机 sudo 无密码 → 不可用，故用此推算口径）。</caption>
     <tr><th>优化项</th><th>机理</th><th>字节变化</th><th>预测 TPOT / 吞吐</th><th>代价 / 风险</th></tr>
     <tr><td><strong>A. 把 lm_head 也量化到 INT4</strong></td><td>消掉 1.245 GB 的 fp16 输出层，decode 是访存墙 ⇒ 时间近似按字节等比下降</td><td>4.853 → <strong>3.932 GB</strong>（−19%）</td><td class="win">33.1 → ≈26.8 ms<br>30.2 → <strong>≈37.3 tok/s（+23%）</strong></td><td>输出层对量化更敏感，需用 n=210 基准实测掉点</td></tr>
-    <tr><td><strong>B. 手写 W4A16 GEMV，把带宽效率从 72.2% 提到 85%</strong></td><td>GEMV 占 72% 时间却是效率最低项（147.9 GB/s）；向量化 load / double-buffer 是常规手段</td><td>不变</td><td>33.1 → ≈30.2 ms<br>（<strong>+10%</strong>）</td><td>纯工程量；需与 TRT 插件集成才能端到端生效</td></tr>
-    <tr><td>A + B 叠加</td><td>两者作用在不同项上，可叠加</td><td>−19%</td><td class="win">≈24.5 ms（<strong>+35%</strong>）</td><td>—</td></tr>
+    <tr><td>B. 手写 W4A16 GEMV 提升带宽效率<br><span style="font-size:12px;color:var(--err)"><strong>← 已被 1.6 节实测推翻</strong></span></td><td>本以为 GEMV 只到「峰值」72.2% 尚有余量；但 <strong>该口径错了</strong>——分母应为实测可达带宽 152.3 GB/s，TRT 已达其 <strong>97.1%</strong></td><td>不变</td><td><span style="color:var(--err)">原预测 +10% 不成立</span><br>真实上限 ≈ <strong>+2%</strong> 端到端</td><td>见 1.6 节：此路基本不通</td></tr>
+    <tr><td>A + B 叠加</td><td>B 已被推翻 ⇒ 实际可期的就是 A</td><td>−19%</td><td class="win">≈26.8 ms（<strong>+23%</strong>，来自 A）</td><td>—</td></tr>
   </table>
+
+  <h3>1.6 手写 kernel 对照：先量"天花板"，再决定要不要优化</h3>
+  <p>1.5 节给出的 B 项优化（手写 GEMV 把带宽效率从 72.2% 提上去）听起来诱人。但在动手写之前必须先回答一个问题：<strong>这台机器的 DRAM 到底能给多少带宽？</strong>「占理论峰值 72%」只有在硬件真能跑到 100% 时才意味着有 28% 可捞。于是先用自己写的纯流式读 kernel（1 GB、128-bit load）实测可达上限，再写三个版本的 W4A16 GEMV 与 TRT 对照。</p>
+  <figure><img src="figures/gemv_kernel_bench.png" alt="hand-written W4A16 GEMV vs TensorRT"><figcaption><b>图 10 · 手写 W4A16 GEMV 与 TRT 及真实带宽天花板对照</b><br><b>横轴</b>：四种真实投影形状（K×N，取自 Cosmos-Reason2-8B 的 q/k/v/o 与 gate/up/down）<br><b>竖轴</b>：实测有效带宽 (GB/s)；点线=理论峰值 204.8、<span style="color:#16a34a">绿实线=实测可达读带宽 152.3</span>、<span style="color:var(--err)">红虚线=TRT 的 147.9</span><br><b>结果</b>：<strong>这台 Orin 的实测可达读带宽只有 152.3 GB/s（理论峰值的 74.4%）</strong>，两次运行 151.7 / 152.3（差 0.4%），并与 NVIDIA 论坛社区实测的 151.7 GB/s D2D 独立吻合。<strong>据此 TRT 的 GEMV 达到可达带宽的 97.1%</strong>。我最好的手写版本（v4：x 进 shared memory + half2 融合乘加）只有 79.2 GB/s = 可达的 52.0%，<strong>比 TRT 慢 1.87×</strong><br><b>分析</b>：① <strong>我上一节的 B 项优化被自己的测量推翻</strong>——正确的分母是可达带宽而非理论峰值，TRT 的 GEMV 只剩 <strong>3.0% 余量，端到端约 +2%</strong>，手写 kernel 这条路基本不通。② 版本间的教训很典型：v2/v3 单纯把 32-bit load 换成 128-bit 反而<strong>更慢</strong>，因为真正的瓶颈不是 DRAM 而是<strong>逐元素重复读 x + 标量 int→fp16 转换</strong>；v4 把 x 放进 shared memory（一个 block 内 8 个 warp 复用）并改用 half2 后才提升 1.4–4×。③ 要再补上与 TRT 的 1.87× 差距，还需 AWQ/FasterTransformer 的 <code>lop3</code> 位技巧（直接拼出 fp16 尾数、免掉转换指令）+ 权重离线置换——而 TRT 已经做了这些。④ <strong>真正的结论：decode 的优化杠杆不在 kernel，而在字节数</strong>（即 A 项：量化 lm_head）。</figcaption></figure>
+  <div class="callout warn">
+    <div class="t">方法论：这一节的价值在于"没做成"</div>
+    如果只对着理论峰值 204.8 GB/s 看，会得出"kernel 有 28% 可优化"的错误结论并白写几天代码。<strong>先花半小时测出真实天花板 152.3 GB/s，就知道 TRT 已经到 97%、该停手</strong>。工程判断力的一部分是知道哪里<strong>不值得</strong>优化——附带也验证了：现成推理框架的核心 kernel 通常已被调到接近硬件极限，收益要从<strong>算法/数据表示</strong>（量化位宽、KV cache、稀疏）而非手写 kernel 里找。<br>
+    <span style="color:var(--muted)">诚实标注：v4 用 half2 累加，相对误差 0.1–0.7%（v1 用 float 累加为 0.04%）；若要产品化需改回 float 累加，会再损失一点速度。此微基准为独立 kernel、非端到端集成。</span>
+  </div>
 
   <h2>二、方法细节（可复现）</h2>
 
   <h3>2.1 方法总览（端到端流程 · 为什么这么设计）</h3>
-  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 10 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
+  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 11 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
   <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
   <p style="margin-bottom:4px"><strong>为什么这么设计（关键选择的理由）：</strong></p>
   <ol style="margin-top:0">
