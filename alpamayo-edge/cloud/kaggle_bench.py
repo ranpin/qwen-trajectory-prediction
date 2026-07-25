@@ -18,7 +18,7 @@ from transformers import AutoProcessor, AutoModelForImageTextToText
 from qwen_vl_utils import process_vision_info
 
 MODEL="nvidia/Cosmos-Reason2-8B"; REPO="nvidia/Cosmos-Reason1-Benchmark"
-SUBSETS=["robovqa"]; K=6; MAXNEW=12; MAXSIDE=448  # 每帧≤448px→~256 ViT patches;6帧≈1536<Orin ViT 引擎上限4096
+SUBSETS=["robovqa","robofail"]; K=6; MAXNEW=12; MAXSIDE=448  # 每帧≤448px→~256 ViT patches;6帧≈1536<Orin ViT 引擎上限4096
 OUT="/kaggle/working"; FR=f"{OUT}/frames"; os.makedirs(FR,exist_ok=True)
 
 print("[dl] snapshot benchmark repo...",flush=True)

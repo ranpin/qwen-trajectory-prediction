@@ -1,0 +1,25 @@
+
+NOTICE: Existing SQLite export found: int4_dec_node.sqlite
+        It is assumed file was previously exported from: int4_dec_node.nsys-rep
+        Consider using --force-export=true if needed.
+
+Time (%),Total Time (ns),Instances,Avg (ns),Med (ns),Min (ns),Max (ns),StdDev (ns),Name
+71.5,585395318,6048,96791.6,53407.0,14912,492992,76960.2,"void trt_edgellm::kernel::gemv_kernel<(int)2, (int)1, (int)256, (int)128>(const __half *, const unsigned int *, const __half *, __half *, int, int)"
+21.9,178950924,24,7456288.5,6903903.0,6896383,10362848,1268551.0,sm80_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize64x96x32_stage4_warpsize2x2x1_tensor16x8x16_execute_kernel_trt
+2.7,21814462,864,25248.2,22240.0,20160,90144,9460.6,kernel_mha
+0.7,6112496,864,7074.6,5919.0,5407,45791,3251.3,__myl_AddCasMulMeaAddSqrDivMulCasMulMulMul_0x21637c0488031cec24efd206838149d9_vec
+0.7,5453216,768,7100.5,5983.0,5535,25760,2958.9,__myl_AddCasMulMeaAddSqrDivMulCasMulMulMul_0x569ee612b08521322be4ee98c811a880_vec
+0.5,3984287,864,4611.4,3936.0,3456,18944,1794.3,"void trt_edgellm::kernel::applyRopeWriteKV<__half, __half>(T1 *, T1 *, const T1 *, T2 *, const float *, const int *, const int *, float, float, int, int, int, unsigned int, unsigned int, unsigned int, unsigned int, int, int, bool)"
+0.5,3833968,864,4437.5,3615.0,2879,16480,2259.5,__myl_CasCasCasMulTanMulAddMulMulMulCas_0x133fefa89f2f4f2935c5df740ea9a66d_vec
+0.4,3560959,864,4121.5,3296.0,2976,18560,2136.0,__myl_CasMulMeaAddSqrDivMulCasMul_0x891b0402f2734b2ea20d184e12ddb8fd
+0.4,2894719,864,3350.4,2720.0,2400,14816,1823.1,__myl_CasMulMeaAddSqrDivMulCasMul_0x09d344a8aebe75aa57607ab703d26f2a_vec
+0.3,2678430,864,3100.0,2495.5,2240,15104,1520.2,__myl_CasCasMulCas_0x92c5efc464262c847126dbde275034c3
+0.3,2490868,864,2882.9,2207.0,1823,17440,1874.1,__myl_Mul_0xa7003272e9503ec918877510b35a88df
+0.1,552420,72,7672.5,6239.0,5695,25728,3982.4,__myl_AddAddCasMulMeaAddSqrDivMulCasMulMulMul_0xa3c2572009d219a382e3754519e9824b_vec
+0.0,306848,24,12785.3,11568.0,8992,29472,4052.8,__myl_CasMulMeaAddSqrDivMulCasMulMulMul_0x25461c0e52e8eaf871b1bb6af7db9ac4_vec
+0.0,240960,24,10040.0,9248.0,8672,15360,2062.1,__myl_Cas_0x1a8fb0124651100c9ac39415aef6b76a_vec
+0.0,132288,24,5512.0,4640.0,4608,10816,1755.4,__myl_CasAddSqrDivMulCasMulResGat_0x0f93532ae3e0643ccb605d5d0a7332d2
+0.0,106540,24,4439.2,3743.0,3647,8320,1407.7,__myl_AddCasMulMea_0x88edd6b70c3993a102ceedb6bc481cb4_vec
+0.0,106144,24,4422.7,4000.0,2816,10912,1628.1,"trt_edgellm::kernel::incrementLengthTensorKernel(int *, const int *, int, int)"
+0.0,40000,1,40000.0,40000.0,40000,40000,0.0,"void trt_edgellm::kernel::initializeNormalRopeCosSinKernel<(int)128>(float *, float, float, int)"
+

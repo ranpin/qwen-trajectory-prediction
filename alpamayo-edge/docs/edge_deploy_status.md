@@ -117,6 +117,34 @@ FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（O
 - ⇒ 想让 INT4 的 prefill 也提速，必须上 **W4A8** 之类"激活也量化"的方案，让 GEMM 真跑在低精度张量核上。
 - 口径：算力天花板均为 **GPU 稠密**值、**不含 DLA**；NVIDIA 宣传的 275 TOPS = GPU 稀疏 170 + 双 DLA 稀疏 105，GPU-only 稠密仅为其 31%。模型侧 7.575 B 矩阵乘参数由 config 解析推出，×2 B = 15.15 GB 与实测 FP16 引擎大小自校验一致。
 
+## Kernel 级剖析（Nsight Systems，2026-07-25 新增）
+
+复现命令与产物：`eval/profile/README.md`、`eval/profile/int4_decode_kern_sum.csv`；图 `docs/figures/kernel_breakdown.png`。
+**方法坑（重要）**：TRTEdge 的 decode 走已捕获的 **CUDA graph**，nsys 默认 `--cuda-graph-trace=graph` 会把 20 次计时迭代折叠成一个区间，只有 3 次慢速 warmup 被逐 kernel 归因 → 份额和带宽都算错。**必须加 `--cuda-graph-trace=node`**（node 口径四项合计 33.8 ms ≈ 实测 TPOT 33.1 ms，自洽）。
+**`ncu` 不可用**：Nsight Compute 硬件计数器需 root，本机 `sudo` 需密码 → 带宽改用「解析字节 ÷ 实测 kernel 耗时」，字节数已与引擎文件大小自校验到 **+0.13%**。
+
+| kernel | 每 token 耗时 | 占比 | 有效带宽（占 204.8 GB/s 峰值） |
+|---|---|---|---|
+| **W4A16 GEMV**（每层 7 次：q/k/v/o + gate/up/down） | 24.39 ms | **72.1%** | **147.9 GB/s（72.2%）** |
+| **lm_head fp16 GEMM**（N=151936） | 7.46 ms | **22.0%** | 166.9 GB/s（81.5%） |
+| attention `kernel_mha` | 0.91 ms | 2.7% | — |
+| 已融合 elementwise（RMSNorm/RoPE/SwiGLU） | 1.08 ms | 3.2% | — |
+
+**引擎字节按角色分解**（合计 4.853 GB vs 实测引擎文件 4.847 GB，+0.13%）：INT4 权重 3.473 GB(71.6%)、AWQ scales+zeros 0.136 GB(2.8%)、**lm_head fp16（未量化）1.245 GB(25.6%)**。
+
+三点发现：
+1. **lm_head 根本没被量化**——AWQ 默认跳过输出层，于是它独占 **25.6% 的 decode 字节**；且 M=1 却被调度到 `tilesize64x96` 的 GEMM kernel（身份由 grid 维度确认：`grid=(1,1583,1)`，1583×96=151968≈vocab 151936）。
+2. **效率最低的恰是最大头**：GEMV 只到峰值 72.2%，而 lm_head 有 81.5% → 手写 kernel 的目标空间在 GEMV。
+3. **TRT 已把 RMSNorm/RoPE/SwiGLU 融合掉了**（kernel 名 `__myl_AddCasMulMeaAddSqrDivMulCasMulMulMul` 即融合链）且 CUDA graph 已启用 ⇒ **"算子融合 + 降 launch 开销"这条常规路线在此几无空间（合计仅 3.2%）——诚实的负结果**，原计划的 K4 据此重定向。
+
+**由此推出的优化余量（预测，尚未实施）**：
+
+| 优化 | 字节 | 预测 TPOT / 吞吐 | 代价 |
+|---|---|---|---|
+| A. lm_head 也量化到 INT4 | 4.853 → **3.932 GB**（−19%） | 33.1 → **≈26.8 ms**，30.2 → **≈37.3 tok/s（+23%）** | 输出层对量化敏感，需实测掉点 |
+| B. 手写 W4A16 GEMV，带宽 72.2%→85% | 不变 | 33.1 → ≈30.2 ms（**+10%**） | 工程量；需做成 TRT plugin 才端到端生效 |
+| A+B | −19% | **≈24.5 ms（+35%）** | — |
+
 ## 部署选型结论
 
 - **交互式 / 单流低延迟 / 省电续航 / 精度敏感** → **INT4**：decode 吞吐高 57%、能效高 64%、显存省 42%，且掉点更小（PPL +9.8% vs +18.1%）。
