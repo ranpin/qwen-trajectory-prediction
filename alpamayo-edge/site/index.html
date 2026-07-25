@@ -203,10 +203,19 @@ footer a{color:var(--accent)}
     <span style="color:var(--muted)">诚实标注：v4 用 half2 累加，相对误差 0.1–0.7%（v1 用 float 累加为 0.04%）；若要产品化需改回 float 累加，会再损失一点速度。此微基准为独立 kernel、非端到端集成。</span>
   </div>
 
+  <h3>1.7 视觉塔：多模态才是真实负载，它占 TTFT 的 1/4</h3>
+  <p>前面所有性能数字都只测了 LLM。但这是个 <strong>VLM</strong>，真实请求是"若干帧图像 + 问题"，而<strong>视觉塔从未被单独测量、且至今仍是未量化的 fp16</strong>（1.168 GB 引擎）。用 <code>llm_inference --dumpProfile</code> 拿到 TRT 自带的分段 GPU 时间，按帧数扫描（AV 场景对应多路相机）。</p>
+  <figure><img src="figures/vision_tower.png" alt="vision tower cost and multi-camera scaling"><figcaption><b>图 11 · 视觉塔开销与多相机扩展性</b><br><b>横轴</b>：左=输入帧数(1/2/4/6)，右=输入帧数（视作每路相机 1 帧，含外推到 8 路）<br><b>竖轴</b>：左=首 token 延迟 TTFT (ms)，按「视觉塔 / LLM prefill」堆叠；右=视觉塔 GPU 时间 (ms)，红虚线=引擎 <code>maxInputLen=1024</code> 的硬墙<br><b>结果</b>：视觉塔耗时随帧数<strong>严格线性</strong>——拟合 <strong>4.5 + 23.2 ms×帧</strong>（R²=0.997），每帧 112 个 image token @≤448px；它占 TTFT 的 <strong>19.3% → 24.7%</strong>（1→6 帧）。6 帧 TTFT 593 ms（视觉 146 + prefill 446）。外推 8 路相机：视觉 ≈190 ms、TTFT ≈775 ms<br><b>分析</b>：① <strong>视觉塔是被忽略的四分之一</strong>，且是唯一仍跑 fp16 的部件——量化它是明确的下一步收益点。② <strong>发现一个硬约束</strong>：8 帧 = 8×112+77 = <strong>973 token，逼近引擎 maxInputLen=1024</strong>；<strong>9 帧就装不下</strong>，AV 的 6–8 路相机正好卡在上限，若要每路多帧（视频）必须用更大 maxInputLen 重建引擎。③ prefill 随帧数增长更快（≈65 ms/帧），因为每帧带来 112 个 token 进 attention —— 所以多相机场景的瓶颈在 prefill 而非视觉塔本身。</figcaption></figure>
+  <div class="callout warn">
+    <div class="t">INT8 视觉塔：本地不可行（实测确认的约束）</div>
+    <code>visual_build</code> <strong>没有精度参数</strong>（只有 <code>--onnxDir/--engineDir</code> 与 token 上限），视觉塔精度完全由导出的 ONNX 决定，而 ModelOpt 的量化默认跳过了视觉塔。⟹ <strong>要量化视觉塔必须回云端重导 ONNX</strong>，本地无路可走。此项已排入待办，等凭据轮换后执行。<br>
+    <span style="color:var(--muted)">口径说明：本节 TTFT 用 TRT 自报的分段 GPU 时间；<code>llm_inference</code> 报的 generation "16.3 ms/token" <strong>未采用</strong>——它把单个 decode step 的 32.93 ms 除以了 "Generated Tokens: 2"（其中一个 token 由 prefill 产出），而 32.93 ms 恰与 llm_bench 的 33.13 ms 吻合，故 TPOT 仍以 llm_bench 为准。6 帧视觉塔两次测得 144.52 / 146.17 ms（差 1.1%）。</span>
+  </div>
+
   <h2>二、方法细节（可复现）</h2>
 
   <h3>2.1 方法总览（端到端流程 · 为什么这么设计）</h3>
-  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 11 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
+  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 12 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
   <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
   <p style="margin-bottom:4px"><strong>为什么这么设计（关键选择的理由）：</strong></p>
   <ol style="margin-top:0">

@@ -105,3 +105,11 @@
 
 ---
 > 说明：**量化校准集用的是通用新闻文本（非驾驶域）** 属于**方法局限/口径**而非 bug，其影响分析见 [METHODOLOGY.md](METHODOLOGY.md) §4 与主页面「思考讨论」。
+
+
+### F1. 换工作目录后引擎"反序列化失败"（2026-07-25）
+
+- **现象**：`llm_inference` 报 `failed to deserialize engine: .../llm.engine`，而同一引擎用 `llm_bench` 一直正常。
+- **根因**：插件路径。`~/.bashrc` 开头对**非交互式 shell 会提前 `return`**，所以 ssh 里 `source ~/.bashrc` 并不会设上 `EDGELLM_PLUGIN_PATH`；此前 `llm_bench` 能跑纯属侥幸——命令的 cwd 在 `/home/vision/TensorRT-Edge-LLM/` 下，命中了默认的**相对**路径 `build/libNvInfer_edgellm_plugin.so`（`build` 是指向 `build_orin` 的软链）。这次把 cwd 换到 `/home/vision` 后相对路径失效 → 自定义插件未注册 → 引擎反序列化必失败。
+- **解决**：非交互式调用一律**显式** `export EDGELLM_PLUGIN_PATH=/home/vision/TensorRT-Edge-LLM/build_orin/libNvInfer_edgellm_plugin.so`。
+- **教训**：报错信息（反序列化失败）与真因（插件没加载）相隔很远；"换个目录就崩"要先怀疑相对路径依赖。同理 `nvcc` 也不在非交互式 ssh 的 PATH 里，需 `export PATH=/usr/local/cuda/bin:$PATH`。

@@ -172,6 +172,26 @@ decode 真正的杠杆只剩**减少字节数**（优化 A：量化 lm_head，�
 3. **Jetson 按负载调 GPU/EMC 频率、`jetson_clocks` 需 root（不可用）**：计时前须持续预热（本基准跑 400 次）再取最优；
    否则短脉冲测得的天花板只有 104.9 GB/s（偏低 30%，首版就踩了这个坑）。
 
+## 视觉塔剖析与多相机扩展性（2026-07-25 新增）
+
+产物 `eval/vision/`（RESULTS.json + vision_viz.py），图 `docs/figures/vision_tower.png`。
+方法：`llm_inference --dumpProfile --warmup 1`，取 TRT 自报的分段 GPU 时间；帧取 robovqa_0_*.jpg（≤448px）。
+
+| 帧数 | image token | 视觉塔 (ms) | prefill token | prefill (ms) | TTFT (ms) | 视觉塔占比 |
+|---|---|---|---|---|---|---|
+| 1 | 112 | 29.05 | 189 | 121.58 | 150.6 | 19.3% |
+| 2 | 224 | 51.33 | 303 | 195.96 | 247.3 | 20.8% |
+| 4 | 448 | 93.52 | 531 | 336.43 | 429.9 | 21.8% |
+| 6 | 672 | 146.17 | 759 | 446.41 | 592.6 | **24.7%** |
+
+- **视觉塔耗时严格线性**：拟合 **4.5 + 23.2 ms × 帧**（R²=0.997），每帧 112 token。外推 8 路相机：视觉 ≈190 ms、TTFT ≈775 ms。
+- **视觉塔是被忽略的 1/4，且是唯一仍是 fp16 的部件**（引擎 1.168 GB，ModelOpt 量化默认跳过它）→ 明确的下一步收益点。
+- **发现硬约束**：8 帧 = 8×112+77 = **973 token，逼近引擎 `maxInputLen=1024`；9 帧装不下**。AV 的 6–8 路相机正好卡上限，每路多帧（视频）需用更大 maxInputLen 重建引擎。
+- prefill 增长更快（≈65 ms/帧）⇒ **多相机场景瓶颈在 prefill，不在视觉塔本身**。
+- **INT8 视觉塔本地不可行（实测确认）**：`visual_build` 无精度参数（仅 onnxDir/engineDir/token 上限），精度由 ONNX 决定 ⇒ 必须回云端重导 → 待凭据轮换后执行。
+- **踩坑**：`~/.bashrc` 对非交互式 shell 提前 `return`，`EDGELLM_PLUGIN_PATH` 不生效；`llm_bench` 之前能跑是因 cwd 在 `TensorRT-Edge-LLM/` 下命中相对路径 `build/`（软链）。换 cwd 后引擎**反序列化直接失败**，须显式 export（已进 PROBLEMS.md）。
+- **口径**：`llm_inference` 报的 generation "16.3 ms/token" **不采用**——它把单个 decode step 的 32.93 ms 除以 "Generated Tokens: 2"（其一由 prefill 产出）；32.93 ms 与 llm_bench 的 33.13 ms 吻合，TPOT 仍以 llm_bench 为准。Peak unified memory 恒为 ~4856 MB（≈LLM 引擎大小），似未计入另载的视觉塔引擎，原值记录、口径未确认。
+
 ## 部署选型结论
 
 - **交互式 / 单流低延迟 / 省电续航 / 精度敏感** → **INT4**：decode 吞吐高 57%、能效高 64%、显存省 42%，且掉点更小（PPL +9.8% vs +18.1%）。

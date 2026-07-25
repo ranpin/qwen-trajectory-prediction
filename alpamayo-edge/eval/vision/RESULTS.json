@@ -1,0 +1,26 @@
+{
+  "device": "orin-dog (Jetson AGX Orin, sm_87, MAXN)",
+  "engines": {
+    "llm": "engines/int4/llm (INT4 AWQ, 4.847 GB)",
+    "visual": "engines/int4/visual (fp16, 1.168 GB, NOT quantized)"
+  },
+  "method": "llm_inference --dumpProfile --warmup 1, TRT-reported GPU time per stage; frames = robovqa_0_*.jpg at <=448px",
+  "note_plugin": "EDGELLM_PLUGIN_PATH must be exported explicitly; ~/.bashrc returns early for non-interactive shells, and the relative fallback path only resolves when cwd is the TensorRT-Edge-LLM dir",
+  "per_frame_image_tokens": 112,
+  "runs": [
+    {"frames": 1, "image_tokens": 112, "vision_ms": 29.05, "prefill_tokens": 189, "prefill_ms": 121.58, "peak_unified_mem_mb": 4856.70},
+    {"frames": 2, "image_tokens": 224, "vision_ms": 51.33, "prefill_tokens": 303, "prefill_ms": 195.96, "peak_unified_mem_mb": 4856.78},
+    {"frames": 4, "image_tokens": 448, "vision_ms": 93.52, "prefill_tokens": 531, "prefill_ms": 336.43, "peak_unified_mem_mb": 4855.91},
+    {"frames": 6, "image_tokens": 672, "vision_ms": 146.17, "prefill_tokens": 759, "prefill_ms": 446.41, "peak_unified_mem_mb": 4856.47}
+  ],
+  "repeatability": "6-frame vision encoder measured 144.52 ms and 146.17 ms on two runs (1.1% apart)",
+  "constraints": {
+    "llm_maxInputLen": 1024,
+    "implication": "112 image tokens/frame => at most 8 frames (896 tokens) plus a short prompt fit; 9+ frames requires rebuilding the LLM engine with a larger maxInputLen"
+  },
+  "caveats": {
+    "decode_number_unused": "llm_inference reports 'Average Time per Token: ~16.3 ms' for generation, but that divides a single decode step's GPU time (32.93 ms) by 'Generated Tokens: 2' (which counts the prefill-produced first token). 32.93 ms matches llm_bench's 33.13 ms E2E TPOT, so TPOT is reported from llm_bench, not from this field.",
+    "peak_memory_scope": "Peak unified memory is ~4856 MB regardless of frame count and ~equals the LLM engine size alone, so this counter appears to exclude the separately-loaded visual engine; reported verbatim, scope not confirmed.",
+    "int8_vision_blocked": "visual_build exposes no precision flag (only onnxDir/engineDir/token limits) => the vision tower's fp16 precision is fixed by the exported ONNX. Quantizing it requires re-exporting in the cloud (Kaggle), which needs the HF/Kaggle credentials pending rotation."
+  }
+}
