@@ -1,15 +1,26 @@
-# Kaggle script — Cosmos-Reason2-8B INT4 (AWQ) export for TensorRT-Edge-LLM.
+# Kaggle script - Cosmos-Reason2-8B INT4 (AWQ) export WITH THE LM-HEAD ALSO QUANTIZED.
 #
-# History of failures this fixes (each was a real run):
-#   v13  secret HTTP 400        -> embedded HF token fallback (API runs can't read secrets)
-#   v14  CUDA OOM on load       -> device_map="auto" shards 8B across both T4s (PATCH A/B)
-#   v15a cross-device export     -> consolidate sharded model to CPU before export (PATCH C)
-#   v15b "No space left"         -> THIS FILE: int4-only + delete HF checkpoint right after
-#                                   ONNX export + df -h logging + pack in try/finally so a
-#                                   late failure never loses an already-built artifact.
+# WHY THIS RUN EXISTS (measured, not guessed):
+#   Nsight profiling of the shipped INT4 engine on Jetson Orin showed the lm_head is
+#   NOT quantized -- AWQ skips the output layer by default -- so it sits in the engine
+#   as fp16 and accounts for 1.245 GB = 25.6% of every decode step's bytes, and 22.0%
+#   of decode time (see alpamayo-edge/eval/profile/ and docs/edge_deploy_status.md).
+#   Decode is DRAM-bound (roofline: AI ~3 FLOP/byte vs a 210 ridge), so cutting those
+#   bytes should translate almost 1:1 into latency:
+#       predicted 4.853 GB -> 3.932 GB (-19%)  =>  TPOT 33.1 ms -> ~26.8 ms (+23% tok/s)
+#   TRTEdge exposes this directly: --lm_head_quantization int4_awq (no source patch).
+#   Risk to measure, not assume: the output layer is the most quantization-sensitive
+#   part of the model, so this run must be re-scored on the n=210 benchmark, not just timed.
 #
-# PREREQ: Accelerator = GPU T4 x2, Internet = On. (HF_TOKEN secret optional — we fall back.)
-# RUN AS: pushed via `kaggle kernels push` == Save & Run All (Commit) == background run.
+# History of failures the patches below fix (each was a real run):
+#   v13  secret HTTP 400     -> HF token from env/secret (never hardcode in the git copy)
+#   v14  CUDA OOM on load    -> device_map="auto" shards 8B across both T4s (PATCH A/B)
+#   v15a cross-device export -> consolidate sharded model to CPU before export (PATCH C)
+#   v15b "No space left"     -> heavy work under /tmp, drop HF checkpoint right after ONNX
+#                               export, pack in try/finally
+#
+# PREREQ: Accelerator = GPU T4 x2 (metadata MUST set machine_shape=NvidiaTeslaT4; plain
+#         enable_gpu gives a single P100/sm_60 which new torch cannot run), Internet = On.
 import os, subprocess, glob, shutil
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -115,8 +126,12 @@ subprocess.run("nvidia-smi --query-gpu=index,name,memory.total --format=csv,nohe
 # 4) Quantize -> export ONNX -> immediately shrink footprint. int4_awq only (primary
 #    deliverable). int8 is a separate run so it can never clobber int4's disk space.
 MODEL = "nvidia/Cosmos-Reason2-8B"
-# int4_awq already produced & downloaded (kernel v16). This run = int8_sq comparison point.
-QF = "int8_sq"
+# int4_awq backbone (same as the shipped engine) + lm_head ALSO int4_awq. The only
+# delta vs the deployed artifact is the lm_head, so any TPOT/accuracy difference is
+# attributable to that single change.
+QF = "int4_awq"
+LMH = "int4_awq"
+TAG = "int4_awq_lmh"
 # CRITICAL: /kaggle/working is a fixed 20GB loop device; int8's checkpoint (~10GB)
 # + ONNX (~10GB) overflow it. Do all heavy work under /tmp, which lives on the
 # 7.9TB overlay `/` (1.1TB free). Only the final packed tgz goes to /kaggle/working
@@ -126,21 +141,22 @@ ART = f"{SCRATCH}/artifacts"
 os.makedirs(ART, exist_ok=True)
 ok = False
 try:
-    ckpt = f"{SCRATCH}/Cosmos-8B-{QF}"
+    ckpt = f"{SCRATCH}/Cosmos-8B-{TAG}"
     onnx = f"{ckpt}/onnx"
-    sh(f"tensorrt-edgellm-quantize llm --model_dir {MODEL} --output_dir {ckpt} --quantization {QF}")
+    sh(f"tensorrt-edgellm-quantize llm --model_dir {MODEL} --output_dir {ckpt} "
+       f"--quantization {QF} --lm_head_quantization {LMH}")
     df("after-quantize")
     sh(f"tensorrt-edgellm-export {ckpt} {onnx}")
     df("after-onnx")
     # keep ONLY the onnx; drop the multi-GB HF checkpoint safetensors at once
-    dest = f"{ART}/Cosmos-8B-{QF}-onnx"
+    dest = f"{ART}/Cosmos-8B-{TAG}-onnx"
     shutil.move(onnx, dest)
     shutil.rmtree(ckpt, ignore_errors=True)
     df("after-shrink")
-    print(f"COSMOS_{QF}_OK -> {dest}", flush=True)
+    print(f"COSMOS_{TAG}_OK -> {dest}", flush=True)
     ok = True
 except Exception as e:
-    print(f"COSMOS_{QF}_FAILED:", e, flush=True)
+    print(f"COSMOS_{TAG}_FAILED:", e, flush=True)
 finally:
     # Always package whatever ONNX we managed to build; never lose a built artifact.
     produced = glob.glob(f"{ART}/*-onnx")
@@ -148,7 +164,7 @@ finally:
         try:
             # free the HF model cache first so packing has room even if disk is tight
             shutil.rmtree("/kaggle/working/TRTEdge", ignore_errors=True)
-            sh("tar -czf /kaggle/working/edge_artifacts.tgz -C " + ART + " " +
+            sh("tar -czf /kaggle/working/edge_artifacts_lmhead.tgz -C " + ART + " " +
                " ".join(os.path.basename(p) for p in produced))
             print("PACKED_OK", [os.path.basename(p) for p in produced], flush=True)
         except Exception as pe:

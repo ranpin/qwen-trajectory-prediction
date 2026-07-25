@@ -78,3 +78,19 @@ ADE/FDE/MR+CI · CVM 基线 · 评估驱动 · BEV 可视化 —— 见 `eval/`�
 给出 decode-选-INT4、prefill-选-INT8 的选型依据。(VLA 轨道:部署 10B Alpamayo-R1 含 flow-matching 轨迹头
 + CVM 强基线 ADE/FDE 评测——暂缓。)
 技能:模型量化(INT4/INT8/AWQ/SmoothQuant/ModelOpt)、边缘部署(Jetson Orin/TensorRT-Edge-LLM)、多模态 VLM、量化精度评测。
+
+
+## 2026-07-26 后续实验批次（状态）
+
+| # | 实验 | 状态 |
+|---|---|---|
+| K1 | Nsight kernel 级剖析 | ✅ 完成 —— 发现 lm_head 未量化（占 decode 字节 25.6%）；TRT 已融合 elementwise，融合无空间 |
+| K2 | 手写 W4A16 GEMV 对照 | ✅ 完成 —— 实测可达带宽 152.3 GB/s，TRT 已达其 97.1% ⇒ **推翻**"手写 kernel 有 10% 余量"的预测 |
+| — | 视觉塔剖析 | ✅ 完成 —— 4.5+23.2ms/帧，占 TTFT 19–25%；发现 8 帧撞 maxInputLen=1024 |
+| K3' | **lm_head INT4 量化** | 🔄 **进行中** —— Kaggle kernel `alpamayo-edge-lmhead` 已跑；预测 TPOT 33.1→26.8ms(+23%)，需重测 n=210 正确率 |
+| — | 视觉塔 INT8 | ❌ **死路**（实测确认）：工具仅暴露 fp8，sm_87 不支持 fp8 |
+| — | KV cache 量化 | ❌ **死路**：同上，仅 fp8 |
+| K5 | W4A8（prefill 提速） | ❌ **死路**：TRTEdge 全仓库无 W4A8 实现；需换框架，列为未来工作 |
+| K4 | CR2-2B vs 8B Pareto | ⛔ **阻塞（需用户操作）**：`nvidia/Cosmos-Reason2-2B` 用有效 token 返回 **HTTP 403** —— 8B 的许可已接受、2B 未接受。需在 HF 上接受 2B 许可后即可继续 |
+
+详见 `docs/METHODOLOGY.md` §3.5「sm_87 上的量化选项空间」。

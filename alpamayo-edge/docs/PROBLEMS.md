@@ -113,3 +113,23 @@
 - **根因**：插件路径。`~/.bashrc` 开头对**非交互式 shell 会提前 `return`**，所以 ssh 里 `source ~/.bashrc` 并不会设上 `EDGELLM_PLUGIN_PATH`；此前 `llm_bench` 能跑纯属侥幸——命令的 cwd 在 `/home/vision/TensorRT-Edge-LLM/` 下，命中了默认的**相对**路径 `build/libNvInfer_edgellm_plugin.so`（`build` 是指向 `build_orin` 的软链）。这次把 cwd 换到 `/home/vision` 后相对路径失效 → 自定义插件未注册 → 引擎反序列化必失败。
 - **解决**：非交互式调用一律**显式** `export EDGELLM_PLUGIN_PATH=/home/vision/TensorRT-Edge-LLM/build_orin/libNvInfer_edgellm_plugin.so`。
 - **教训**：报错信息（反序列化失败）与真因（插件没加载）相隔很远；"换个目录就崩"要先怀疑相对路径依赖。同理 `nvcc` 也不在非交互式 ssh 的 PATH 里，需 `export PATH=/usr/local/cuda/bin:$PATH`。
+
+
+### G1. 上游源码漂移让 Kaggle 量化 run 直接失败（2026-07-26）
+
+- **现象**：新推的 `alpamayo-edge-lmhead` kernel 跑到 169 s 就 `ERROR`，日志末尾：
+  `AssertionError: PATCH C needle not found — TRTEdge source changed upstream`（`/kaggle/src/script.py:116`）。
+- **根因**：脚本用 `git clone --depth 1`（**未 pin commit**）拉 TensorRT-Edge-LLM，再对
+  `quantization/quantize.py` 打三处字符串补丁。上游在 `os.makedirs(output_dir, exist_ok=True)` 与
+  `with torch.inference_mode(), _skip_resmooth_for_hybrid(` **之间插入了一段注释**，
+  于是要求两行相邻的 PATCH C needle 失配。PATCH A/B 仍匹配。
+- **解决**：把 PATCH C 的锚点改成**只锚单行** `    os.makedirs(output_dir, exist_ok=True)`（在当前上游文件中仍唯一，已核对 `grep -c` = 1），
+  插入位置改为该行之前。同时确认**上游至今仍未自己做 sharded→CPU 合并**（grep `remove_hook_from_module` / `to("cpu")` 均无命中），
+  所以 PATCH C 依然必要。修复已回写到 `cloud/kaggle_lmhead_int4.py` **和**原始的 `cloud/kaggle_cosmos_only.py`。
+- **教训**：
+  1. **这次 assert 起了正作用**——它让失败在 169 s 内明确暴露，而不是"看似打了补丁"后在几十分钟的量化尾声炸掉、或更糟：**静默产出一个错的模型**。字符串补丁必须配唯一性断言。
+  2. **锚点要选最小且稳定的片段**。要求多行相邻＝把上游的排版当契约，注释一改就断。
+  3. **`clone --depth 1` 不 pin commit 是可复现性缺口**（§4.1 已要求如实标注）。真正的修法是 pin 到 commit；
+     当前保持 main 以便拿上游修复，代价就是这类漂移，已在此明确记录。
+  4. 失败 run 的 `/kaggle/working` 残留（含整个 TRTEdge 源码树）可通过 `kaggle kernels output` 拉回，
+     **正好用来直接读当前上游源码定位漂移**——比盲猜快得多。日志要用 `kaggle kernels logs`（`kernels output` 不含日志）。

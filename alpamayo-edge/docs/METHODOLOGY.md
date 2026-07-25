@@ -43,6 +43,31 @@
 
 **环境**（精确版本见 §0）:Jetson AGX Orin Developer Kit (sm_87) / L4T R36.4.4 (JetPack 6.2) / CUDA 12.6.11 / TensorRT 10.7.0.23 / TensorRT-Edge-LLM v0.9.0@`1ac0f2b` / **MAXN**;batch=1。
 
+### 3.5 sm_87 上的量化选项空间（2026-07-26 实测枚举，含三条死路）
+
+把 TRTEdge `tensorrt-edgellm-quantize` 的**全部**精度选项对着 Orin(sm_87) 的硬件能力过一遍，
+结论是**优化空间比想象的窄得多**——这决定了后续实验做什么、不做什么（源码取自设备上
+`/home/vision/TensorRT-Edge-LLM/tensorrt_edgellm/scripts/quantize.py`）：
+
+| 目标部件 | 工具暴露的选项 | sm_87 可用? | 处置 |
+|---|---|---|---|
+| **骨干** `--quantization` | fp8 / int4_awq / nvfp4 / mxfp8 / int8_sq | 仅 **int4_awq**、**int8_sq** | ✅ 两者都已部署实测 |
+| **lm_head** `--lm_head_quantization` | fp8 / int4_awq / nvfp4 / mxfp8 | **int4_awq** ✅ | ✅ **本轮执行**（decode 字节 −19%，预测 +23%） |
+| **视觉塔** `--visual_quantization` | **仅 fp8** | ❌ | **死路**：fp8 需 sm_89+，Orin 是 sm_87 |
+| **KV cache** `--kv_cache_quantization` | **仅 fp8** | ❌ | **死路**：同上 |
+| **W4A8**（roofline 指出的 prefill 提速路径） | **工具中不存在**（全仓库 grep 无命中） | ❌ | **死路**：需上游支持 |
+
+三条死路的意义：
+1. **视觉塔 INT8 不可能**（不只是"要回云端"，而是工具只给 fp8、硬件又不支持 fp8）。视觉塔占 TTFT 的
+   19–25% 却只能停在 fp16 —— 这是**工具链+硬件共同造成的硬上限**，不是我们没做。
+2. **KV cache 量化不可用** ⇒ 长上下文下减少 decode 字节的另一条路也封了。
+3. **W4A8 不存在** ⇒ roofline 推出的"让 prefill 也提速"的唯一方案在本工具链上无法实施；
+   要么等上游，要么换框架（如 TensorRT-LLM 主线 / llama.cpp），属未来工作。
+
+⇒ **在 sm_87 + TRTEdge 这个组合下，量化侧可做的优化在 lm_head 之后基本穷尽**。剩余收益需从
+**模型规模选择**（2B vs 8B）或**换框架**里找。校准集默认值也在此确认：`--dataset cnn_dailymail`、
+`--num_samples 512`（与 §4 记录一致）。
+
 ### 3.1 延迟 / 吞吐 —— `llm_bench`
 ```bash
 # prefill(读题):inputLen=512
