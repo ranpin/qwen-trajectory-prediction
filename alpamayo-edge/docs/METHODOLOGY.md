@@ -3,6 +3,24 @@
 > 本文件回答四个根本问题:**模型/权重从哪来、数据集是什么、指标怎么定义与测、量化用了什么校准集及其影响**。
 > 所有数字均为实测、可复现;无标注/未测的地方明确标注,不外推。更新:2026-07-22。
 
+## 0.0 输入 / 输出规格（三个层次，勿混淆）
+
+回答"这套系统喂什么、吐什么"。真实逐字实例：`eval/io_example/`（输入帧 + `freeform_in.json` + `freeform_out.json`，
+图 `docs/figures/io_example.png`）。
+
+| 层次 | 输入 | 输出 | 频率 / 位置 |
+|---|---|---|---|
+| **① 运行时系统** | **N 帧图像**（≤448 px，每帧 **112 image token**）+ **文字问题** | **文字**（场景描述 / 风险判断 / 行动建议）；格式由 prompt 决定：散文，或"只答一个字母"时退化为单 token | 每请求一次，**Jetson Orin 上** |
+| **② 构建流水线**（我们做的工程） | **HF fp16 权重** `nvidia/Cosmos-Reason2-8B` + **校准集** cnn_dailymail 512 篇 | **2 个设备专用 TensorRT 引擎**：LLM（INT4 4.85 GB / INT8 8.30 GB）+ 视觉塔（fp16 1.17 GB） | **一次性**：量化在 Kaggle T4×2，建引擎在 Orin |
+| **③ 评测** | **210 道带标准答案的选择题**（每题 6 帧）+ 12 条 prompt（perplexity 辅助） | 正确率 + Wilson 95%CI + McNemar p；TTFT/TPOT/TPS/功耗/能效 | 每次改配置重跑，Orin（云端仅出 FP16 参考） |
+
+**token 账（实测）**：6 帧 × 112 = 672 image token + 87 text token = **759 token** 送 prefill；
+输出长度由 `max_generate_length` 控制（基准评测设 12，自由问答实例设 110）。
+**引擎 `maxInputLen=1024`** ⇒ 最多约 8 帧（8×112+提示词 = 973 token）；9 帧需以更大 maxInputLen 重建引擎。
+
+**我们不训练、不微调**，只做训练后量化 + 部署 + 评测。**本项目不输出轨迹/控制量**——那属于下游
+Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
+
 ## 0. 来源与版本总表（全部实测，可追溯）
 
 > 值均取自实际环境（`git rev-parse` / `dpkg -l` / `cat /etc/nv_tegra_release` / `nvcc` / config.json / 运行日志），非记忆、非编造。**未 pin 的版本如实标注**——诚实优先于好看。

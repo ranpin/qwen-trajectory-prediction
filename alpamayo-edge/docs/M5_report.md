@@ -1,5 +1,7 @@
 # M5 — 项目总结报告（论文式 · 可展示版）
 
+**输入 / 输出**：输入 = 若干张图像/视频帧（≤448 px，每帧 112 token）+ 一个自然语言问题；输出 = 一段自然语言回答（场景描述 / 风险判断 / 行动建议）。**不输出轨迹或控制量**。真实逐字实例见 `eval/io_example/` 与 `docs/figures/io_example.png`；三层 I/O 界定见 `METHODOLOGY.md` §0.0。
+
 > 结构：摘要 → 核心结果 → 方法细节（可复现）→ 思考讨论。
 > 详细指标 [edge_deploy_status.md](edge_deploy_status.md)｜方法与校准 [METHODOLOGY.md](METHODOLOGY.md)｜**问题记录（含 FMHA 根因）[PROBLEMS.md](PROBLEMS.md)**｜目标对照 [plan.md](plan.md)。
 

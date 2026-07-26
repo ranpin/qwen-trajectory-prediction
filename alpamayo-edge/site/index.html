@@ -77,6 +77,7 @@ footer a{color:var(--accent)}
 
   <h2>摘要</h2>
   <p>把 NVIDIA <strong>Cosmos-Reason2-8B</strong>（物理场景推理 VLM，非轨迹预测器，属"感知 + 推理 / 可解释"层）用 <strong>TensorRT-Edge-LLM</strong> 量化为 <strong>INT4 (AWQ)</strong> 与 <strong>INT8 (SmoothQuant)</strong>，部署到 <strong>Jetson Orin (sm_87)</strong> 端到端跑通推理；按标准服务指标（TTFT / TPOT / TPS / E2E）测性能功耗，并在<strong>官方 Cosmos-Reason1-Benchmark（带标准答案）</strong>实测量化对<strong>任务正确率</strong>的影响。<span style="color:var(--muted)">零预算 · 零训练 · 全 Orin。</span></p>
+  <p style="margin-bottom:4px"><strong>输入 / 输出（一句话）：</strong>输入 = <strong>若干张图像 / 视频帧 + 一个自然语言问题</strong>；输出 = <strong>一段自然语言回答</strong>（场景描述、风险判断、行动建议）。<strong>不输出轨迹或控制量</strong>。真实逐字实例与三个层次的 I/O 界定见 <a href="#io" style="color:var(--accent)">§2.1</a>。</p>
   <p style="margin-bottom:4px"><strong>核心结论：</strong></p>
   <ol style="margin-top:0">
     <li><strong>量化既提速又是 32GB 边缘的唯一可部署方案</strong>：decode 比 FP16 快 <strong>2.66×(INT4)/1.70×(INT8)</strong>、E2E 快 2.5×；FP16 在 32GB dog 上 build(峰 55GB)与载入(15GB 引擎+缓存)<strong>双双 OOM</strong>，只能在 64GB goat 跑，dog 部署 INT4/INT8。</li>
@@ -223,18 +224,35 @@ footer a{color:var(--accent)}
 
   <h2>二、方法细节（可复现）</h2>
 
-  <h3>2.1 方法总览（端到端流程 · 为什么这么设计）</h3>
-  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 13 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
+  <h3 id="io">2.1 输入是什么、输出是什么（先看这个）</h3>
+  <p>这一节回答最基本的问题：<strong>这套系统喂进去什么、吐出来什么</strong>。下面这张图里的图像、问题、输出<strong>全部是真实运行的原文</strong>（INT4 引擎、orin-dog 实测，产物在 <code>eval/io_example/</code>）。</p>
+  <figure><img src="figures/io_example.png" alt="real input and output example"><figcaption><b>图 13 · 真实输入 → 真实输出实例（逐字未改）</b><br><b>上排</b>：输入之一 = <strong>6 帧视频画面</strong>（缩放到 ≤448 px），经视觉塔编码为 <strong>每帧 112 个 image token，共 672 个</strong><br><b>中排</b>：输入之二 = <strong>一段文字问题</strong>（本例 87 token）。两者拼成 <strong>759 token</strong> 的 prompt 送入 prefill<br><b>下排</b>：输出 = <strong>自回归生成的文字</strong>（本例生成到 110 token 上限被截断，故末句未完）<br><b>说明</b>：同一个引擎在基准评测模式下，问题结尾改成"Answer with ONLY the single letter"，输出就退化为<strong>单个字母</strong>（如 <code>A</code>）——这正是 n=210 正确率所打分的对象。所以"输出格式"完全由 prompt 决定，模型本身始终是<strong>文本生成</strong>。</figcaption></figure>
+  <table>
+    <caption><strong>表 7</strong>　三个层次的输入 / 输出，别混淆：①运行时系统 ②一次性构建流水线 ③评测。前两者常被混为一谈，是"讲不清这个项目做了什么"的主要原因。</caption>
+    <tr><th>层次</th><th>输入</th><th>输出</th><th>频率 / 在哪跑</th></tr>
+    <tr><td><strong>① 运行时系统</strong><br><span style="font-size:12px;color:var(--muted)">= 部署完成后每来一个请求</span></td><td><strong>N 帧图像</strong>（≤448 px，每帧 112 token）<br>＋ <strong>文字问题</strong></td><td><strong>文字</strong>：场景描述 / 风险判断 / 行动建议<br><span style="font-size:12px;color:var(--muted)">格式由 prompt 决定（散文 或 单字母）</span></td><td>每请求一次<br><strong>Jetson Orin 上</strong></td></tr>
+    <tr><td><strong>② 构建流水线</strong><br><span style="font-size:12px;color:var(--muted)">= 我们做的"算法/工程"部分</span></td><td><strong>HF fp16 预训练权重</strong>（Cosmos-Reason2-8B）<br>＋ <strong>校准集</strong>（cnn_dailymail 512 篇）</td><td><strong>2 个设备专用 TensorRT 引擎</strong><br>LLM（INT4 4.85 GB / INT8 8.30 GB）＋ 视觉塔（fp16 1.17 GB）</td><td><strong>一次性</strong><br>量化在云 T4×2，建引擎在 Orin</td></tr>
+    <tr><td><strong>③ 评测</strong><br><span style="font-size:12px;color:var(--muted)">= 怎么证明它没坏</span></td><td><strong>210 道带标准答案的选择题</strong>（每题 6 帧）<br>＋ 12 条 prompt（perplexity 辅助）</td><td><strong>正确率 + 95%CI + McNemar p</strong>；延迟/吞吐/功耗/能效</td><td>每次改配置重跑<br>Orin（云端只出 FP16 参考）</td></tr>
+  </table>
+  <div class="callout">
+    <div class="t">一句话讲给别人听</div>
+    <strong>输入</strong>：若干张车载/场景图像 + 一个用自然语言问的问题。<strong>输出</strong>：一段自然语言的回答（场景里发生了什么、有没有风险、建议怎么做）。<br>
+    <strong>我们做的不是训练模型</strong>，而是把 NVIDIA 已训练好的 8B 多模态模型<strong>压到能在一块 Jetson Orin 上实时跑</strong>：INT4 量化后引擎 4.85 GB、decode 30.9 tok/s、整机 ~23 W，并<strong>用带标准答案的官方基准证明正确率没有显著损失</strong>。<br>
+    <span style="color:var(--muted)">它<strong>不</strong>输出轨迹/控制量——那属于下游的 Alpamayo 1.5 VLA（见表 1），本项目部署的是它的 VLM backbone。</span>
+  </div>
+
+  <h3>2.2 方法总览（端到端流程 · 为什么这么设计）</h3>
+  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 14 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
   <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
   <p style="margin-bottom:4px"><strong>为什么这么设计（关键选择的理由）：</strong></p>
   <ol style="margin-top:0">
     <li>8B（16 GB）本地 3070（8 GB）装不下、Orin 无外网 → 量化这类<strong>一次性重活放免费云 T4×2</strong>。</li>
     <li>以 <strong>ONNX 作跨平台中间表示</strong> → 云端导出与边缘建引擎解耦、可复用。</li>
     <li>TensorRT 引擎按 GPU 架构（sm_87）特化 → <strong>必须在目标设备本地构建</strong>。</li>
-    <li>生成式 VLM 无标注任务集 → 精度用 <strong>FP16 参考的相对退化</strong>（perplexity / 一致率），与性能轴分离评测。</li>
+    <li>精度与性能<strong>分两轴独立评测</strong>：精度以<strong>官方带标准答案基准的任务正确率</strong>为主指标（n=210，配 Wilson CI 与 McNemar），另用 FP16 参考的 perplexity / 一致率作更敏感的<strong>辅助</strong>指标；性能用合成序列测纯 prefill/decode，与内容无关。<span style="color:var(--muted)">（早期因未接入带标注基准，曾只用相对退化口径——现已以真实基准为主。）</span></li>
   </ol>
 
-  <h3>2.2 方法细节（配置与口径）</h3>
+  <h3>2.3 方法细节（配置与口径）</h3>
   <ul>
     <li><strong>模型 / 权重</strong>：<a href="https://huggingface.co/nvidia/Cosmos-Reason2-8B" target="_blank" style="color:var(--accent)"><code>nvidia/Cosmos-Reason2-8B</code></a>（HuggingFace 门控，NVIDIA 预训练；我们<strong>只做推理量化，不训练/微调</strong>；revision 未 pin）。实测架构：36 层 · hidden 4096 · GQA 32/8 头 · RoPE 262144 · vocab 151936（<strong>Qwen3-VL-8B-Instruct</strong> 系 backbone）。</li>
     <li><strong>量化</strong>：NVIDIA ModelOpt 训练后量化(PTQ)。INT4 = AWQ(W4A16)、INT8 = SmoothQuant(W8A8)。<strong>校准集 = 工具默认的 <a href="https://huggingface.co/datasets/cnn_dailymail" target="_blank" style="color:var(--accent)">CNN/DailyMail 3.0.0</a> 前 512 篇 `article`（新闻文本、纯文本路径、非驾驶域</strong>——见讨论 caveat）。视觉塔未量化（保 fp16）。</li>
