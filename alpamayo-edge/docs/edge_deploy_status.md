@@ -14,6 +14,15 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
    ✅ INT4/INT8          ✅       ✅ SHA256    ✅          ✅ LLM+视觉塔   ✅        ✅ 两版      ✅ 两版连贯
 ```
 
+## 结构与实验逻辑总览（2026-07-26 新增）
+
+两张全局图，用于把后面所有"某模块占 xx%"的数字挂到结构上、并说清各实验之间的因果：
+
+- **模型结构 × 优化落点**：`eval/model_arch.py` → `docs/figures/model_arch.png`。每个模块标注参数量 / 每 token 字节 / decode 时间占比 / 我们做了什么。逐模块账见 [METHODOLOGY.md §0.1](METHODOLOGY.md)。
+  - 一句话：**被量化的只有 decoder 的 36×7 个线性层（6.946 B = 矩阵乘参数 91.8%，占 decode 时间 72.1%）**；`lm_head`（0.622 B，8.2%）**未被量化**却吃掉 **25.6% 字节 / 22.0% 时间**；视觉塔仍 fp16、占 TTFT 19–25%；norm/RoPE/SwiGLU 已融合，仅 3.2%。
+  - 字节账自校验：3.473 + 0.136 + 1.245 = **4.853 GB**（vs 实测引擎 4.847 GB，+0.13%）；÷ TPOT 33.1 ms = 146.5 GB/s = 实测可达带宽 152.3 GB/s 的 **96%** ⇒ 只剩"减少字节"这一条杠杆。
+- **实验逻辑链**：`eval/experiment_logic.py` → `docs/figures/experiment_logic.png`。七轮实验 = 上一轮结论逼出下一轮问题；含 §1.5 之后两条互斥提速路线的分叉（手写 kernel 被实测证否 / lm_head 量化未做成）。
+
 ## 产物体积对照
 
 | 组件 | INT4 (AWQ) | INT8 (SmoothQuant) | 比值 |

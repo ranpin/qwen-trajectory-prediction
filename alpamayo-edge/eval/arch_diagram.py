@@ -63,7 +63,8 @@ box(2.75, "TensorRT 引擎    INT4 / INT8 / FP16   (设备专用)", ART, "#d9770
 arrow(2.32, 1.7)
 box(1.25, "边缘推理 llm_inference / llm_bench   +   tegrastats 采功耗", EDGE, EDGE_E, w=8.6, h=0.85)
 arrow(0.82, 0.2)
-box(-0.35, "评测   ·  性能：延迟 / 吞吐 / 显存 / 功耗 / 能效\n·  精度：vs FP16 参考 perplexity + token 一致率",
+box(-0.35, "评测   ·  性能：延迟 / 吞吐 / 显存 / 功耗 / 能效\n"
+    "·  精度：官方基准 n=210 任务正确率（FP16 参考 perplexity 为辅）",
     EVAL, EVAL_E, w=9.0, h=1.05, fs=BASE)
 ax.set_ylim(-1.0, 10)
 
