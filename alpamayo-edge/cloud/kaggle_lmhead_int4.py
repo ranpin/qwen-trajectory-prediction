@@ -70,18 +70,45 @@ _A_old = (
     '                    trust_remote_code=True,\n'
     '                ).to(device)'
 )
-# NOTE (2026-07-26, run v2 failure): plain device_map="auto" fills both T4s to ~13.6/14.56 GiB,
-# and quantizing the lm_head needs a ~1.16 GiB temp for its 4096x151936 weight -> CUDA OOM
-# inside modelopt's fake_quantize. Cap per-GPU placement so ~3.5 GiB stays free for the
-# quantizer's temporaries. 11+11 GiB still holds the whole 16 GB fp16 model on-GPU.
+# NOTE (2026-07-26): plain device_map="auto" fills both T4s to ~13.6/14.56 GiB, and
+# quantizing the lm_head needs a ~1.16 GiB temp for its 4096x151936 weight -> CUDA OOM
+# inside modelopt's fake_quantize (run v2, failed at 845 s).
+# v3 tried max_memory=11GiB/GPU and STILL OOMed at the same point (836 s) with GPU 1 again
+# at 13.58 GiB: the cap bounds only the *initial weight placement*, while quantization then
+# adds ~2.5 GiB of its own state (11 + 2.5 ~= 13.5, matching the log) and eats the headroom
+# back. So the cap has to be low enough to cover placement AND quantization state:
+# v5 (10 GiB/GPU, placement {'0':16,'1':25}, nothing on CPU) OOMed again with the SAME free
+# memory (1006.81 MiB) as v3 -> `max_memory` bounds only the initial PLACEMENT; quantization
+# state then grows to the same water line regardless of the cap. Capping the total is the
+# wrong lever. What matters is the free room on the ONE card that receives lm_head.
+# Modules are assigned in order, so lm_head (last) lands on the LAST device -> make that
+# device hold few weights: ASYMMETRIC caps. Empirically a card holding W GiB of weights ends
+# up at W + ~2.5 GiB, so 11 GiB on GPU0 (-> ~13.5, survived in v3) and 6 GiB on GPU1
+# (-> ~8.5, leaving ~6 GiB for the 1.16 GiB lm_head temp). 11+6=17 GiB >= the 16.3 GiB model,
+# so nothing spills to CPU (v4 showed CPU offload breaks AWQ calibration outright).
+# v4 (9 GiB/GPU) for the record: the cap DID take effect (placement {'0':16,'1':24,'cpu':1}) but
+# 18 GiB was not enough for the ~16.3 GiB model + accelerate's accounting, so ONE module
+# (the 1.24 GB lm_head, the largest single module) spilled to CPU -- and then AWQ calibration
+# died with `CUDA error: an illegal memory access` inside F.linear under accelerate's offload
+# hook: ModelOpt's AWQ calibration and CPU offload do not mix.
+# So the window is narrow: everything must stay on GPU *and* ~1.2 GiB must stay free on the
+# card holding lm_head. 11 GiB -> OOM by 0.16 GiB; 9 GiB -> CPU spill. Use 10 GiB:
+# 20 GiB total covers the 16.3 GiB model (no spill) and leaves ~4 GiB/GPU for temporaries.
+# The device-map print stays so the placement is verified, never assumed.
 _A_new = (
     '                model = factory.from_pretrained(\n'
     '                    model_dir,\n'
     '                    torch_dtype=torch_dtype,\n'
     '                    trust_remote_code=True,\n'
     '                    device_map="auto",\n'
-    '                    max_memory={0: "11GiB", 1: "11GiB", "cpu": "60GiB"},\n'
-    '                )'
+    '                    max_memory={0: "11GiB", 1: "6GiB", "cpu": "60GiB"},\n'
+    '                )\n'
+    '                try:\n'
+    '                    from collections import Counter as _C\n'
+    '                    _dm = getattr(model, "hf_device_map", None) or {}\n'
+    '                    print("[edge-patch] device placement:", dict(_C(str(v) for v in _dm.values())), flush=True)\n'
+    '                except Exception as _e:\n'
+    '                    print("[edge-patch] device map probe failed:", _e, flush=True)'
 )
 _B_old = '    model.to(torch_dtype)'
 _B_new = (

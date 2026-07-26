@@ -212,10 +212,19 @@ footer a{color:var(--accent)}
     <span style="color:var(--muted)">口径说明：本节 TTFT 用 TRT 自报的分段 GPU 时间；<code>llm_inference</code> 报的 generation "16.3 ms/token" <strong>未采用</strong>——它把单个 decode step 的 32.93 ms 除以了 "Generated Tokens: 2"（其中一个 token 由 prefill 产出），而 32.93 ms 恰与 llm_bench 的 33.13 ms 吻合，故 TPOT 仍以 llm_bench 为准。6 帧视觉塔两次测得 144.52 / 146.17 ms（差 1.1%）。</span>
   </div>
 
+  <h3>1.8 该缩精度还是缩模型？—— 2B vs 8B 的 Pareto</h3>
+  <p>前面所有实验回答的是"用哪种精度"，但部署真正要回答的是"用多大的模型"。于是把 <strong>Cosmos-Reason2-2B</strong> 用<strong>与已部署 8B 完全相同的配置</strong>（int4_awq 骨干、lm_head 保持 fp16）量化部署，使唯一变量是模型规模，并在同一套 210 题基准上用同一个打分脚本评分。</p>
+  <figure><img src="figures/pareto.png" alt="precision vs model size Pareto"><figcaption><b>图 12 · 精度 vs 模型规模的 Pareto</b><br><b>横轴</b>：左=decode 吞吐 (tok/s)，右=LLM 引擎体积 (GB，对数轴)<br><b>竖轴</b>：210 题多选正确率 (%)，误差棒=Wilson 95% CI，绿虚线=FP16 8B 的 76.2%<br><b>结果</b>：8B 的三个精度点几乎连成<strong>水平线</strong>（76.2 → 75.2 → 73.8，全部 p&gt;0.4 不显著），而 <strong>INT4 2B 掉到 65.2%（vs FP16 −11.0 pts、vs INT4 8B −8.6 pts），McNemar p=0.005 显著</strong>；代价换来的是 decode 再快 2.5×（30.9→74.6 tok/s）、引擎再缩 3.6×（4.85→1.36 GB）<br><b>分析</b>：<strong>量化几乎免费，缩小模型不免费</strong>——这是本项目最可执行的一条选型结论：<strong>激进量化 + 保留大模型</strong>。只有在 8B 连 INT4 都装不下、或确实需要 &gt;70 tok/s 的场景才用 2B，并且必须接受可测量的正确率损失。另外两个预测的验证：引擎大小的解析预测 1.355 GB vs 实测 <strong>1.364 GB（误差 0.7%）</strong>；但 TPOT 按字节比预测 9.3 ms、实测 <strong>13.41 ms</strong>——因为 2B 的有效带宽只有 101.7 GB/s = 可达上限的 <strong>67%</strong>（8B INT4 是 97%），<strong>模型越小带宽效率越低</strong>，所以字节比只能给出加速的上界。</figcaption></figure>
+  <div class="callout warn">
+    <div class="t">诚实交代：一个做不成的实验（lm_head 量化）</div>
+    1.5 节的优化 A（量化 lm_head，预测 <strong>+23%</strong> decode）<strong>至今没有做成</strong>，因此它仍是<strong>未验证的预测</strong>而非结果。工具本身有现成开关 <code>--lm_head_quantization int4_awq</code>，但在 Kaggle 的 2×T4（每张 14.56 GiB）上连试 5 次都失败，且是<strong>两面夹击</strong>：显存上限够高到把所有模块留在 GPU 时，承载 lm_head 的那张卡剩不下它需要的 1.16 GiB 临时张量 → <strong>CUDA OOM</strong>；把上限压低腾出空间，模块就外溢到 CPU → <strong>ModelOpt 的 AWQ 校准与 accelerate 的 offload hook 不兼容，直接 illegal memory access</strong>。更关键的是 <code>max_memory</code> 只约束<strong>初始权重放置</strong>——两次不同上限的 OOM 剩余显存<strong>完全相同（1006.81 MiB）</strong>，说明量化状态之后照样把显存吃回同一水位，压总量根本不是有效杠杆。<br>
+    <strong>出路</strong>：需要单卡 ≥24 GB（L4 / A6000 / A100），让 8B 权重 + 1.16 GiB 临时张量无需分片即可容纳，从而同时避开两个失败模式。完整的 5 次实验记录见 <a href="https://github.com/ranpin/qwen-trajectory-prediction/blob/alpamayo-edge/alpamayo-edge/docs/PROBLEMS.md" target="_blank" style="color:var(--accent)">PROBLEMS.md G3</a>。
+  </div>
+
   <h2>二、方法细节（可复现）</h2>
 
   <h3>2.1 方法总览（端到端流程 · 为什么这么设计）</h3>
-  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 12 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
+  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 13 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
   <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
   <p style="margin-bottom:4px"><strong>为什么这么设计（关键选择的理由）：</strong></p>
   <ol style="margin-top:0">

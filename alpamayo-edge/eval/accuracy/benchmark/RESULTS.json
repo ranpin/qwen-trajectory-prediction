@@ -1,62 +1,101 @@
 {
-  "benchmark": "nvidia/Cosmos-Reason1-Benchmark (robovqa+robofail)",
-  "format": "multiple-choice, ground-truth",
-  "n": 210,
-  "frames_per_video": 6,
-  "frame_max_side": 448,
-  "note": "Only robovqa(110)+robofail(100) ship videos in-repo; agibot/bridgev2/holoassist(300) are annotations-only (need external source videos) -> full 510 needs external video pipeline (future work). No Cosmos-Reason2-Benchmark exists (404); Cosmos-Reason1-Benchmark is the appropriate available benchmark.",
-  "accuracy": {
-    "fp16": 0.762,
-    "int8": 0.752,
-    "int4": 0.738
+ "benchmark": "nvidia/Cosmos-Reason1-Benchmark (robovqa+robofail)",
+ "format": "multiple-choice, ground-truth",
+ "n": 210,
+ "frames_per_video": 6,
+ "frame_max_side": 448,
+ "note": "Only robovqa(110)+robofail(100) ship videos in-repo; agibot/bridgev2/holoassist(300) are annotations-only (need external source videos) -> full 510 needs external video pipeline (future work). No Cosmos-Reason2-Benchmark exists (404); Cosmos-Reason1-Benchmark is the appropriate available benchmark.",
+ "accuracy": {
+  "fp16": 0.762,
+  "int8": 0.752,
+  "int4": 0.738
+ },
+ "dropoff_pts_vs_fp16": {
+  "int8": -1.0,
+  "int4": -2.4
+ },
+ "statistics": {
+  "ci_method": "Wilson 95%",
+  "fp16_ci": [
+   70.0,
+   81.4
+  ],
+  "int8_ci": [
+   69.0,
+   80.6
+  ],
+  "int4_ci": [
+   67.5,
+   79.3
+  ],
+  "mcnemar_p": {
+   "int4_vs_fp16": 0.424,
+   "int8_vs_fp16": 0.845
   },
-  "dropoff_pts_vs_fp16": {
-    "int8": -1.0,
-    "int4": -2.4
+  "conclusion": "No statistically significant accuracy loss (n=210; all McNemar p>0.4; CIs overlap). robovqa 88.2%, robofail 63% (harder)."
+ },
+ "error_analysis": {
+  "items_flipped_vs_fp16": {
+   "int4": 9,
+   "int8": 9,
+   "of_n": 110
   },
-  "statistics": {
-    "ci_method": "Wilson 95%",
-    "fp16_ci": [
-      70.0,
-      81.4
-    ],
-    "int8_ci": [
-      69.0,
-      80.6
-    ],
-    "int4_ci": [
-      67.5,
-      79.3
-    ],
-    "mcnemar_p": {
-      "int4_vs_fp16": 0.424,
-      "int8_vs_fp16": 0.845
-    },
-    "conclusion": "No statistically significant accuracy loss (n=210; all McNemar p>0.4; CIs overlap). robovqa 88.2%, robofail 63% (harder)."
+  "direction": "bidirectional (quant sometimes right where FP16 wrong, and vice versa)",
+  "interpretation": "non-systematic boundary noise, not systematic degradation; several items show a model-level A/B bias shared by FP16 (not quantization-induced)"
+ },
+ "per_subset": {
+  "robovqa": {
+   "n": 110,
+   "fp16": 0.882,
+   "int8": 0.873,
+   "int4": 0.873,
+   "int8_domain": 0.845
   },
-  "error_analysis": {
-    "items_flipped_vs_fp16": {
-      "int4": 9,
-      "int8": 9,
-      "of_n": 110
-    },
-    "direction": "bidirectional (quant sometimes right where FP16 wrong, and vice versa)",
-    "interpretation": "non-systematic boundary noise, not systematic degradation; several items show a model-level A/B bias shared by FP16 (not quantization-induced)"
-  },
-  "per_subset": {
-    "robovqa": {
-      "n": 110,
-      "fp16": 0.882,
-      "int8": 0.873,
-      "int4": 0.873,
-      "int8_domain": 0.845
-    },
-    "robofail": {
-      "n": 100,
-      "fp16": 0.63,
-      "int8": 0.62,
-      "int4": 0.59,
-      "int8_domain": 0.63
-    }
+  "robofail": {
+   "n": 100,
+   "fp16": 0.63,
+   "int8": 0.62,
+   "int4": 0.59,
+   "int8_domain": 0.63
   }
+ },
+ "scorer": "eval/accuracy/benchmark/score_mc.py (committed 2026-07-26). Reproduces every number in this file exactly from cosmos_bench210_manifest.json + orin_*_outputs_n210.json, so the MC accuracies are now reproducible from in-repo data. Before this, the 210-item ground truth existed only on the Orin.",
+ "model_size_sweep_2026_07_26": {
+  "model": "nvidia/Cosmos-Reason2-2B",
+  "config": "int4_awq backbone, lm_head left fp16 -- deliberately mirrors the shipped 8B so model size is the only variable",
+  "engine_gb": 1.364,
+  "engine_gb_predicted": 1.355,
+  "engine_prediction_error_pct": 0.7,
+  "accuracy": {
+   "overall": 65.2,
+   "robovqa": 76.4,
+   "robofail": 53.0
+  },
+  "wilson_ci": [
+   58.6,
+   71.4
+  ],
+  "mcnemar_p_vs_fp16_8b": 0.005,
+  "verdict": "SIGNIFICANT loss: -11.0 pts vs FP16 8B and -8.6 pts vs INT4 8B, p=0.005. Contrast with quantization on 8B, where every comparison was NOT significant (p>0.4). => quantize aggressively, keep the big model.",
+  "perf_dog": {
+   "ttft_512_ms": 74.91,
+   "prefill_tok_s": 6835.3,
+   "tpot_ms": 13.41,
+   "decode_tok_s": 74.6,
+   "tpot_std_ms": 4.34
+  },
+  "speedup_vs_int4_8b": {
+   "prefill": 4.02,
+   "decode": 2.47
+  },
+  "effective_decode_bandwidth_gb_s": 101.7,
+  "note_bandwidth": "1.364 GB / 13.41 ms = 101.7 GB/s = only 67% of the 152.3 GB/s achievable ceiling, vs 97% for the 8B INT4. Smaller models achieve LOWER bandwidth efficiency, so the byte-ratio prediction (9.3 ms) over-predicted the speedup; same direction as the INT4-vs-FP16 efficiency drop measured in K1."
+ },
+ "lm_head_quantization_attempt_2026_07_26": {
+  "status": "BLOCKED on T4 memory -- not achieved, prediction remains unverified",
+  "predicted_gain": "engine 4.853 -> 3.932 GB (-19%), TPOT 33.1 -> ~26.8 ms (+23% tok/s)",
+  "runs": 5,
+  "why_blocked": "Two-sided squeeze on 2x T4 (14.56 GiB each): caps high enough to keep every module on GPU leave <1.16 GiB free on the card holding lm_head -> CUDA OOM in modelopt's fake_quantize; caps low enough to free that room spill modules to CPU -> AWQ calibration dies with 'illegal memory access' under accelerate's offload hook. max_memory bounds only initial placement, so quantization state refills to the same water line regardless (v3 and v5 OOMed with identical 1006.81 MiB free).",
+  "path_forward": "Needs a single GPU >=24 GB (L4/A6000/A100) so the 8B + a 1.16 GiB temp fit without sharding, avoiding both failure modes. cloud/colab_export_quant.ipynb already targets Colab, which offers L4/A100 but requires an interactive session."
+ }
 }

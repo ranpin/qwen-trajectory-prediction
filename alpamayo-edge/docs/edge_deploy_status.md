@@ -192,6 +192,43 @@ decode 真正的杠杆只剩**减少字节数**（优化 A：量化 lm_head，�
 - **踩坑**：`~/.bashrc` 对非交互式 shell 提前 `return`，`EDGELLM_PLUGIN_PATH` 不生效；`llm_bench` 之前能跑是因 cwd 在 `TensorRT-Edge-LLM/` 下命中相对路径 `build/`（软链）。换 cwd 后引擎**反序列化直接失败**，须显式 export（已进 PROBLEMS.md）。
 - **口径**：`llm_inference` 报的 generation "16.3 ms/token" **不采用**——它把单个 decode step 的 32.93 ms 除以 "Generated Tokens: 2"（其一由 prefill 产出）；32.93 ms 与 llm_bench 的 33.13 ms 吻合，TPOT 仍以 llm_bench 为准。Peak unified memory 恒为 ~4856 MB（≈LLM 引擎大小），似未计入另载的视觉塔引擎，原值记录、口径未确认。
 
+## 模型规模 Pareto：2B vs 8B（2026-07-26 新增）
+
+产物 `eval/accuracy/benchmark/`（`score_mc.py` + `cosmos_bench210_manifest.json` + `orin_2b_outputs.json`）、
+图 `docs/figures/pareto.png`。2B 配置**刻意镜像已部署的 8B**（int4_awq 骨干、lm_head 保持 fp16），使唯一变量是模型规模。
+
+| 配置 | 引擎 | TTFT(512) | TPOT | decode | 正确率(n=210) | Wilson 95%CI | McNemar vs FP16 |
+|---|---|---|---|---|---|---|---|
+| FP16 8B † | 15.15 GB | 298.1 ms | 89.3 ms | 11.2 tok/s | 76.2% | [70.0, 81.4] | 参考 |
+| INT8 8B | 8.30 GB | 157.5 ms | 50.7 ms | 19.7 tok/s | 75.2% | [69.0, 80.6] | p=0.845 不显著 |
+| INT4 8B | 4.85 GB | 301.0 ms | 33.1 ms | 30.9 tok/s | 73.8% | [67.5, 79.3] | p=0.424 不显著 |
+| **INT4 2B** | **1.36 GB** | **74.9 ms** | **13.4 ms** | **74.6 tok/s** | **65.2%** | [58.6, 71.4] | **p=0.005 显著** |
+
+† FP16 仅能在 64GB goat 上跑；其余为 orin-dog 实测。
+
+**核心结论（这才是部署选型要的答案）**：
+- **量化几乎免费**：8B 上从 FP16 到 INT4，引擎缩 3.1×、decode 快 2.8×，正确率只掉 2.4 pts 且 **p>0.4 不显著**。
+- **缩小模型不免费**：INT4 下 8B→2B 再快 2.5×、引擎再缩 3.6×，但正确率掉 **8.6 pts（vs FP16 掉 11.0 pts），p=0.005 显著**。
+- ⇒ **激进量化 + 保留大模型**。只有在 8B 连 INT4 都装不下、或需要 >70 tok/s 的场景才考虑 2B，且要接受可测量的正确率损失。
+
+**两个预测的验证情况**：
+- ✅ **引擎大小**：解析预测 2B 引擎 1.355 GB，实测 **1.364 GB，误差 0.7%**。
+- ⚠️ **TPOT**：按字节比预测 9.3 ms，实测 **13.41 ms**。原因是 2B 的有效带宽只有 **101.7 GB/s = 可达上限(152.3)的 67%**，
+  而 8B INT4 是 97% —— **模型越小，带宽效率越低**（固定开销占比上升），与 K1 里 INT4 vs FP16 的效率下降同向。
+  ⇒ 字节比只能给出加速的**上界**，小模型上会明显高估。
+
+**打分可复现性补齐**：此前 MC 正确率没有入库的打分脚本，且 210 题标准答案只存在于 Orin 上。
+现已提交 `score_mc.py` + `cosmos_bench210_manifest.json`，脚本**逐一复现历史发布的全部数字**
+（FP16 76.2/CI[70.0,81.4]、INT4 73.8/[67.5,79.3]/p=0.424、INT8 75.2/[69.0,80.6]/p=0.845），据此确认实现正确。
+
+## lm_head 量化：预测 +23%，但在 T4 上无法完成（2026-07-26）
+
+K1 发现 lm_head 未量化、占 decode 字节 25.6%，预测量化它可得 **+23% decode**（33.1→26.8 ms）。
+TRTEdge 有现成开关 `--lm_head_quantization int4_awq`，但**在 2×T4 上做了 5 次均失败**，
+根因是两面夹击：上限够高→承载 lm_head 的卡剩不下 1.16 GiB 临时空间→**OOM**；上限压低→模块外溢 CPU→
+**AWQ 校准与 offload hook 不兼容而崩**。且 `max_memory` 只约束初始放置（v3/v5 OOM 时剩余显存**完全相同**）。
+**⇒ +23% 至今是"未验证的预测"，不是结果。** 需单卡 ≥24 GB（L4/A6000/A100）才能做。详见 [PROBLEMS.md](PROBLEMS.md) G3。
+
 ## 部署选型结论
 
 - **交互式 / 单流低延迟 / 省电续航 / 精度敏感** → **INT4**：decode 吞吐高 57%、能效高 64%、显存省 42%，且掉点更小（PPL +9.8% vs +18.1%）。
