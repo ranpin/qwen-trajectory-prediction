@@ -11,15 +11,19 @@
 
 ```
 Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRTEdge 建引擎 → 加载 → prefill/decode → 生成(文本+图像)
-   ✅ INT4/INT8          ✅       ✅ SHA256    ✅          ✅ LLM+视觉塔   ✅        ✅ 两版      ✅ 两版连贯
+   ✅ INT4/INT8          ✅       ✅ SHA256    ✅          ✅ LLM+视觉编码器   ✅        ✅ 两版      ✅ 两版连贯
 ```
 
 ## 结构与实验逻辑总览（2026-07-26 新增）
 
-两张全局图，用于把后面所有"某模块占 xx%"的数字挂到结构上、并说清各实验之间的因果：
+四张全局图，用于把后面所有"某模块占 xx%"的数字挂到结构上、并说清各实验之间的因果：
 
+- **上游结构 ↔ 部署形态**：`eval/arch_upstream.py` → `docs/figures/arch_upstream.png`。左=Cosmos-Reason2-8B 按作者口径（视觉 `qwen3_vl_vision` 27 层 · d=1152 · patch 16 · merge 2 · deepstack `[8,16,24]`；文本 `qwen3_vl_text` 36 层 · d=4096 · GQA 32/8 · mRoPE `[24,20,20]`），右=Orin 上的实际部件，圈号一一对应。
+  - 参数账自校验：0.58（视觉）+ 6.95（36 层）+ 0.62（词嵌入）+ 0.62（lm_head）= **8.77 B**，与 NVIDIA 公布规模一致。
+  - 两个易误解点：① **DeepStack** —— ViT 第 8/16/24 层的 3 路特征直接注入 decoder 前 3 层，视觉编码器与解码器是耦合的；② **"词嵌入不在 LLM 引擎内"** = 查表被搬出 TRT 图，成为独立权重 `embedding.safetensors`(1.245 GB) + 运行时 kernel `embeddingLookupWithImageInsertion`，**llm.engine 的输入是 `inputsEmbeds` 而非 token id**，这样才能把视觉向量写进文字 embedding 的空位。
+- **预处理链与 prompt 预算**：`eval/preprocess_chain.py` → `docs/figures/preprocess_chain.png`。真正进网络的不是 448×252 而是 **448×256**（112 token/帧）；基准里另有 40 段 5:4 视频是 **448×352 → 154 token/帧**，最长请求实测 **1015 / maxInputLen 1024**（详见 [PROBLEMS.md](PROBLEMS.md) H1）。**性能基准一张图都不带**（`llm_bench` 合成序列，纯文字路径）。
 - **模型结构 × 优化落点**：`eval/model_arch.py` → `docs/figures/model_arch.png`。每个模块标注参数量 / 每 token 字节 / decode 时间占比 / 我们做了什么。逐模块账见 [METHODOLOGY.md §0.1](METHODOLOGY.md)。
-  - 一句话：**被量化的只有 decoder 的 36×7 个线性层（6.946 B = 矩阵乘参数 91.8%，占 decode 时间 72.1%）**；`lm_head`（0.622 B，8.2%）**未被量化**却吃掉 **25.6% 字节 / 22.0% 时间**；视觉塔仍 fp16、占 TTFT 19–25%；norm/RoPE/SwiGLU 已融合，仅 3.2%。
+  - 一句话：**被量化的只有 decoder 的 36×7 个线性层（6.946 B = 矩阵乘参数 91.8%，占 decode 时间 72.1%）**；`lm_head`（0.622 B，8.2%）**未被量化**却吃掉 **25.6% 字节 / 22.0% 时间**；视觉编码器仍 fp16、占 TTFT 19–25%；norm/RoPE/SwiGLU 已融合，仅 3.2%。
   - 字节账自校验：3.473 + 0.136 + 1.245 = **4.853 GB**（vs 实测引擎 4.847 GB，+0.13%）；÷ TPOT 33.1 ms = 146.5 GB/s = 实测可达带宽 152.3 GB/s 的 **96%** ⇒ 只剩"减少字节"这一条杠杆。
 - **实验逻辑链**：`eval/experiment_logic.py` → `docs/figures/experiment_logic.png`。七轮实验 = 上一轮结论逼出下一轮问题；含 §1.5 之后两条互斥提速路线的分叉（手写 kernel 被实测证否 / lm_head 量化未做成）。
 
@@ -29,12 +33,12 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 |---|---|---|---|
 | LLM ONNX 权重 (`llm/model.onnx.data`) | 4.83 GB | 8.20 GB | 1.70× |
 | 词嵌入 (`embedding.safetensors`, fp16) | 1.24 GB | 1.24 GB | 1.00× |
-| 视觉塔 ONNX (`visual/model.onnx.data`, fp16) | 1.16 GB | 1.16 GB | 1.00× |
+| 视觉编码器 ONNX (`visual/model.onnx.data`, fp16) | 1.16 GB | 1.16 GB | 1.00× |
 | 打包 tgz | 5.77 GB | 7.81 GB | 1.35× |
 | **Orin TensorRT 引擎** — LLM | 4.85 GB | 8.25 GB | 1.70× |
-| **Orin TensorRT 引擎** — 视觉塔 | 1.1 GB | 同 INT4（同一份 fp16，不重建） | 1.00× |
+| **Orin TensorRT 引擎** — 视觉编码器 | 1.1 GB | 同 INT4（同一份 fp16，不重建） | 1.00× |
 
-> 主干 LLM 权重 INT8 是 INT4 的 1.70×，接近 W8A8 vs W4A16 的理论 2×（差在两版共享的 fp16 词嵌入/lm_head 未随之翻倍）。视觉塔当前工具仅支持 fp8/fp16，两版都留 fp16，故主干 LLM 才是量化差异所在。
+> 主干 LLM 权重 INT8 是 INT4 的 1.70×，接近 W8A8 vs W4A16 的理论 2×（差在两版共享的 fp16 词嵌入/lm_head 未随之翻倍）。视觉编码器当前工具仅支持 fp8/fp16，两版都留 fp16，故主干 LLM 才是量化差异所在。
 > 产物 SHA256：INT8 `66f05e38…`（`outputs/edge_artifacts_int8_sq.tgz`，7,807,211,181 B）。
 
 ## 功能与性能指标
@@ -74,7 +78,7 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 
 ### 多模态（图像）路径 ✅
 
-喂 `woman_and_dog.jpeg` + 提问，走**视觉塔 + deepstack 融合 + INT4 LLM** 全路径，模型准确描述海滩场景（女子格子衫、狗戴彩色胸背带、海浪、日落暖光），与官方参照吻合 → VLM 本职能力在 Orin 上端到端正确。
+喂 `woman_and_dog.jpeg` + 提问，走**视觉编码器 + deepstack 融合 + INT4 LLM** 全路径，模型准确描述海滩场景（女子格子衫、狗戴彩色胸背带、海浪、日落暖光），与官方参照吻合 → VLM 本职能力在 Orin 上端到端正确。
 
 ## 量化掉点（vs FP16 基线）✅
 
@@ -98,7 +102,7 @@ FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（O
 
 **方法**：Orin 上 INT4/INT8 引擎贪心生成实际输出 → 用 FP16 模型对每段输出做 **teacher-forced perplexity** 打分（"原始模型对量化输出有多惊讶"，PPL 越低=越贴近 FP16 分布）；并统计与 FP16 贪心输出的 **token 一致前缀**。完整定义见 [METHODOLOGY.md](METHODOLOGY.md) §3.3。
 
-> **量化校准集 + 消融（重要）**：两版均为 NVIDIA ModelOpt PTQ，校准用**默认 512 篇 CNN/DailyMail 新闻**（INT4=AWQ W4A16、INT8=SmoothQuant W8A8；视觉塔未量化）。**已做域内校准消融**：原假设"新闻域错配拖累 INT8"，但用域内小集重量化 INT8 后**反而暴跌**（perplexity +244%、MC 84.5%）→ **假设推翻**；真正结论=**校准集覆盖度/质量比域匹配更重要**，默认 news-512 得验证。详见 [METHODOLOGY.md](METHODOLOGY.md) §4 与 `eval/accuracy/ablation_calibration/`。
+> **量化校准集 + 消融（重要）**：两版均为 NVIDIA ModelOpt PTQ，校准用**默认 512 篇 CNN/DailyMail 新闻**（INT4=AWQ W4A16、INT8=SmoothQuant W8A8；视觉编码器未量化）。**已做域内校准消融**：原假设"新闻域错配拖累 INT8"，但用域内小集重量化 INT8 后**反而暴跌**（perplexity +244%、MC 84.5%）→ **假设推翻**；真正结论=**校准集覆盖度/质量比域匹配更重要**，默认 news-512 得验证。详见 [METHODOLOGY.md](METHODOLOGY.md) §4 与 `eval/accuracy/ablation_calibration/`。
 
 | 指标 | FP16 参考 | INT4 (AWQ) | INT8 (SmoothQuant) |
 |---|---|---|---|
@@ -181,25 +185,25 @@ decode 真正的杠杆只剩**减少字节数**（优化 A：量化 lm_head，�
 3. **Jetson 按负载调 GPU/EMC 频率、`jetson_clocks` 需 root（不可用）**：计时前须持续预热（本基准跑 400 次）再取最优；
    否则短脉冲测得的天花板只有 104.9 GB/s（偏低 30%，首版就踩了这个坑）。
 
-## 视觉塔剖析与多相机扩展性（2026-07-25 新增）
+## 视觉编码器剖析与多相机扩展性（2026-07-25 新增）
 
 产物 `eval/vision/`（RESULTS.json + vision_viz.py），图 `docs/figures/vision_tower.png`。
 方法：`llm_inference --dumpProfile --warmup 1`，取 TRT 自报的分段 GPU 时间；帧取 robovqa_0_*.jpg（≤448px）。
 
-| 帧数 | image token | 视觉塔 (ms) | prefill token | prefill (ms) | TTFT (ms) | 视觉塔占比 |
+| 帧数 | image token | 视觉编码器 (ms) | prefill token | prefill (ms) | TTFT (ms) | 视觉编码器占比 |
 |---|---|---|---|---|---|---|
 | 1 | 112 | 29.05 | 189 | 121.58 | 150.6 | 19.3% |
 | 2 | 224 | 51.33 | 303 | 195.96 | 247.3 | 20.8% |
 | 4 | 448 | 93.52 | 531 | 336.43 | 429.9 | 21.8% |
 | 6 | 672 | 146.17 | 759 | 446.41 | 592.6 | **24.7%** |
 
-- **视觉塔耗时严格线性**：拟合 **4.5 + 23.2 ms × 帧**（R²=0.997），每帧 112 token。外推 8 路相机：视觉 ≈190 ms、TTFT ≈775 ms。
-- **视觉塔是被忽略的 1/4，且是唯一仍是 fp16 的部件**（引擎 1.168 GB，ModelOpt 量化默认跳过它）→ 明确的下一步收益点。
+- **视觉编码器耗时严格线性**：拟合 **4.5 + 23.2 ms × 帧**（R²=0.997），每帧 112 token。外推 8 路相机：视觉 ≈190 ms、TTFT ≈775 ms。
+- **视觉编码器是被忽略的 1/4，且是唯一仍是 fp16 的部件**（引擎 1.168 GB，ModelOpt 量化默认跳过它）→ 明确的下一步收益点。
 - **发现硬约束**：8 帧 = 8×112+77 = **973 token，逼近引擎 `maxInputLen=1024`；9 帧装不下**。AV 的 6–8 路相机正好卡上限，每路多帧（视频）需用更大 maxInputLen 重建引擎。
-- prefill 增长更快（≈65 ms/帧）⇒ **多相机场景瓶颈在 prefill，不在视觉塔本身**。
-- **INT8 视觉塔本地不可行（实测确认）**：`visual_build` 无精度参数（仅 onnxDir/engineDir/token 上限），精度由 ONNX 决定 ⇒ 必须回云端重导 → 待凭据轮换后执行。
+- prefill 增长更快（≈65 ms/帧）⇒ **多相机场景瓶颈在 prefill，不在视觉编码器本身**。
+- **INT8 视觉编码器本地不可行（实测确认）**：`visual_build` 无精度参数（仅 onnxDir/engineDir/token 上限），精度由 ONNX 决定 ⇒ 必须回云端重导 → 待凭据轮换后执行。
 - **踩坑**：`~/.bashrc` 对非交互式 shell 提前 `return`，`EDGELLM_PLUGIN_PATH` 不生效；`llm_bench` 之前能跑是因 cwd 在 `TensorRT-Edge-LLM/` 下命中相对路径 `build/`（软链）。换 cwd 后引擎**反序列化直接失败**，须显式 export（已进 PROBLEMS.md）。
-- **口径**：`llm_inference` 报的 generation "16.3 ms/token" **不采用**——它把单个 decode step 的 32.93 ms 除以 "Generated Tokens: 2"（其一由 prefill 产出）；32.93 ms 与 llm_bench 的 33.13 ms 吻合，TPOT 仍以 llm_bench 为准。Peak unified memory 恒为 ~4856 MB（≈LLM 引擎大小），似未计入另载的视觉塔引擎，原值记录、口径未确认。
+- **口径**：`llm_inference` 报的 generation "16.3 ms/token" **不采用**——它把单个 decode step 的 32.93 ms 除以 "Generated Tokens: 2"（其一由 prefill 产出）；32.93 ms 与 llm_bench 的 33.13 ms 吻合，TPOT 仍以 llm_bench 为准。Peak unified memory 恒为 ~4856 MB（≈LLM 引擎大小），似未计入另载的视觉编码器引擎，原值记录、口径未确认。
 
 ## 模型规模 Pareto：2B vs 8B（2026-07-26 新增）
 

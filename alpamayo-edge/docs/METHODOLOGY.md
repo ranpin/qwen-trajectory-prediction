@@ -10,13 +10,49 @@
 
 | 层次 | 输入 | 输出 | 频率 / 位置 |
 |---|---|---|---|
-| **① 运行时系统** | **N 帧图像**（≤448 px，每帧 **112 image token**）+ **文字问题** | **文字**（场景描述 / 风险判断 / 行动建议）；格式由 prompt 决定：散文，或"只答一个字母"时退化为单 token | 每请求一次，**Jetson Orin 上** |
-| **② 构建流水线**（我们做的工程） | **HF fp16 权重** `nvidia/Cosmos-Reason2-8B` + **校准集** cnn_dailymail 512 篇 | **2 个设备专用 TensorRT 引擎**：LLM（INT4 4.85 GB / INT8 8.30 GB）+ 视觉塔（fp16 1.17 GB） | **一次性**：量化在 Kaggle T4×2，建引擎在 Orin |
+| **① 运行时系统** | **N 帧图像**（我们把长边缩到 448 px；processor 再缩到 32 的整数倍）+ **文字问题** | **文字**（场景描述 / 风险判断 / 行动建议）；格式由 prompt 决定：散文，或"只答一个字母"时退化为单 token | 每请求一次，**Jetson Orin 上** |
+| **② 构建流水线**（我们做的工程） | **HF fp16 权重** `nvidia/Cosmos-Reason2-8B` + **校准集** cnn_dailymail 512 篇 | **2 个设备专用 TensorRT 引擎**：LLM（INT4 4.85 GB / INT8 8.30 GB）+ 视觉编码器（fp16 1.17 GB） | **一次性**：量化在 Kaggle T4×2，建引擎在 Orin |
 | **③ 评测** | **210 道带标准答案的选择题**（每题 6 帧）+ 12 条 prompt（perplexity 辅助） | 正确率 + Wilson 95%CI + McNemar p；TTFT/TPOT/TPS/功耗/能效 | 每次改配置重跑，Orin（云端仅出 FP16 参考） |
 
-**token 账（实测）**：6 帧 × 112 = 672 image token + 87 text token = **759 token** 送 prefill；
+### 0.0.1 图像预处理链与 token 账（2026-07-26 补实测，修正了此前"每帧 112 token"的过度概括）
+
+图 `docs/figures/preprocess_chain.png`（脚本 `eval/preprocess_chain.py`）；原始值 `eval/vision/RESULTS.json`
+的 `preprocessing` / `runs_448x358_2026_07_26` / `max_input_len_headroom_2026_07_26`。
+
+| 步骤 | 做了什么 | 谁做的 |
+|---|---|---|
+| ① 采帧 | 从 benchmark 视频**均匀采 6 帧**，**长边缩到 448 px**（保持长宽比） | **我们**（评测脚本） |
+| ② 尺寸对齐 | `Qwen2VLImageProcessor`：bicubic（`resample=3`）缩到 **patch×merge = 32 的整数倍**，像素总数须落在 `[100352, 2097152]` | 工具（`preprocessor_config.json`） |
+| ③ 归一化 | `/255` → 均值=标准差=**0.5** | 同上 |
+| ④ 切块 | **16×16 patch**；`temporal_patch_size=2`（静态图复制成一对） | 同上 |
+| ⑤ 编码 | **视觉编码器 ViT**（`qwen3_vl_vision`：27 层 · d=1152 · 16 头 · FFN 4304，fp16 未量化）→ **2×2 spatial merge + Merger MLP** → 每 token 4096 维 | `visual.engine` |
+
+**实测帧尺寸与 token 数（1260 张 jpg 全量用 PIL 统计）**：
+
+| 实测帧尺寸 | 段数 | processor 缩放后 | patch 数 | **image token / 帧** | 6 帧合计 |
+|---|---|---|---|---|---|
+| 448×252（16:9） | 170 | **448×256** | 28×16 = 448 | **112** | **672**（实测 `Total Image Tokens: 672`） |
+| 448×358（≈5:4） | 40 | **448×352** | 28×22 = 616 | **154** | **924**（实测 `Total Image Tokens: 924`） |
+
+规则：**token 数 = (W/32) × (H/32)**，即每个 token 覆盖 32×32 px。
+
+**prompt 长度与硬上限（实测 `Computed Tokens`）**：672+87 = **759**（自由问答实例）；924+27 = **951**；
+n=210 里最长的一题（`request_idx 94`，448×358 + 316 字符题干）= **1015**，而引擎 `maxInputLen=1024`
+⇒ **只剩 9 个 token 余量（99.1% 占满）**。基准日志无截断告警、210 条全部返回，故已发布正确率不受影响。
+⇒ **"最多 8 帧"只对 112 token/帧（448×252）成立**；154 token/帧时 **6 帧就到顶**，第 7 帧必然溢出。
 输出长度由 `max_generate_length` 控制（基准评测设 12，自由问答实例设 110）。
-**引擎 `maxInputLen=1024`** ⇒ 最多约 8 帧（8×112+提示词 = 973 token）；9 帧需以更大 maxInputLen 重建引擎。
+
+**各实验实际用了几张图**：精度基准 n=210 每题 **6 帧**；视觉编码器扫描（§1.7）**1/2/4/6 帧**；
+自由问答实例 **6 帧**；而**性能基准（TTFT/TPOT/TPS/功耗/能效、roofline、kernel 剖析、GEMV 微基准）用 0 张图**
+——`llm_bench` 喂合成 token 序列，走纯文字路径，不经视觉编码器。这两类口径不可混用。
+
+**文字路径怎么进 LLM（实测源码口径）**：文字经 Qwen3 BPE 分词器（`tokenizer.json`，日志：151643 词 + 26
+特殊 token）与 chat template 编成 id，其中每帧图像展开成 112（或 154）个 `<|image_pad|>`（id 151655）占位；
+运行时 kernel `embeddingLookupWithImageInsertion`（`cpp/runtime/preprocess/embeddingPreprocessor.cpp`）
+按位置分派：**文字位置查 `embedding.safetensors`（fp16 151936×4096，1.245 GB）；图像占位位置直接写入视觉 token**，
+输出 `inputsEmbeds`——**这才是 llm.engine 的输入（不是 token id）**。所以"词嵌入表不在 LLM 引擎内"的准确含义是：
+**查表被搬出 TRT 图，成为一个独立权重文件 + 一次 GPU gather**，这样才能把视觉向量插进同一个 buffer。
+此外 ViT 第 8/16/24 层的 **3 路 deepstack 特征**（`num_deepstack_features=3`）作为 llm.engine 的**额外输入**注入前 3 层。
 
 **我们不训练、不微调**，只做训练后量化 + 部署 + 评测。**本项目不输出轨迹/控制量**——那属于下游
 Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
@@ -35,7 +71,8 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 | ↳ 以上合计（跑成 W4A16 GEMV kernel） | 36×7 个线性层 | **6.946 B** | **91.8%** | 3.473 GB + scales/zeros 0.136 GB | 74.4% | **72.1%** | 全部提速与缩体积的来源 | §1.1–1.6 |
 | **lm_head** | 4096×151936 | 0.622 B | 8.2% | **1.245 GB** | **25.6%** | **22.0%** | **未量化（AWQ 默认跳过）** → 优化 A，5 次尝试未成 | §1.5、§1.8 末 |
 | 词嵌入表 | 151936×4096 | 0.622 B | — | — | — | — | 单独 fp16 文件，**不在 LLM 引擎内** | — |
-| 视觉塔 ViT | — | ≈0.58 B | — | 独立引擎 1.168 GB（fp16） | — | 占 **TTFT 19–25%** | 未量化（`visual_build` 无精度开关） | §1.7 |
+| 视觉编码器 ViT (`qwen3_vl_vision`) | 27 层 · d=1152 · 16 头 · FFN 4304 · patch 16 · merge 2 | ≈0.58 B（引擎 1.168 GB ÷ 2 = 0.584 B 自校验） | — | 独立引擎 1.168 GB（fp16） | — | 占 **TTFT 19–25%** | 未量化（`visual_build` 无精度开关） | §1.7 |
+| DeepStack（ViT 第 8/16/24 层特征） | 3 路，注入 decoder 前 3 层 | 含在视觉 0.58 B 内 | — | 随图像 token 数 | — | 未单独归因 | 未动（上游结构） | §1.7 |
 | attention 计算（`kernel_mha`） | 无权重 | — | — | KV cache（随上下文） | — | 2.7% | 未动；实测非瓶颈 | §1.1 |
 | RMSNorm / RoPE / SwiGLU | 无 / 少量 | — | — | — | — | 3.2% | TensorRT 已融合，无优化空间 | §1.5 |
 
@@ -53,7 +90,7 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 | 类别 | 型号 / 版本 | 下载地址 / 取证 | 备注 |
 |---|---|---|---|
 | **模型** | `nvidia/Cosmos-Reason2-8B` | https://huggingface.co/nvidia/Cosmos-Reason2-8B （**门控**） | NVIDIA 预训练；**我们只推理量化、不训练**。**revision 未 pin**（导出时下载 main 最新，未记 commit）→ 建议 `from_pretrained(revision=…)` 固定 |
-| 模型架构（实测） | 36 层 · hidden 4096 · 32 Q 头 · **8 KV 头(GQA)** · headDim 128 · RoPE 262144 · vocab 151936 · eos `[151645,151643]` | `edge_int4/…/llm/config.json` + Orin `LLMEngineConfig` 日志 | **Qwen3-VL-8B-Instruct** 系 backbone（非 Qwen2.5-VL；CR1 才是 Qwen2.5-VL-7B）；`AutoModelForImageTextToText` 可加载 |
+| 模型架构（实测） | 文本 `qwen3_vl_text`：36 层 · hidden 4096 · 32 Q 头 · **8 KV 头(GQA)** · headDim 128 · FFN 12288 · mRoPE `[24,20,20]` interleaved · θ=5e6 · RoPE 262144 · vocab 151936 · eos `[151645,151643]`；视觉 `qwen3_vl_vision`：27 层 · d=1152 · 16 头 · FFN 4304 · patch 16 · merge 2 · deepstack `[8,16,24]` | `edge_int4/…/llm/config.json` + Orin `LLMEngineConfig` 日志 | **Qwen3-VL-8B-Instruct** 系 backbone（非 Qwen2.5-VL；CR1 才是 Qwen2.5-VL-7B）；`AutoModelForImageTextToText` 可加载 |
 | **量化校准集** | `cnn_dailymail` config **3.0.0**，split `train` 前 **512** 篇 `article` | https://huggingface.co/datasets/cnn_dailymail | 实测 `quantize.py`；纯文本路径，非驾驶域（见 §4） |
 | **精度探针集** | 12 条手写 prompt（无标注） | `eval/accuracy/prompts_greedy.json`（本仓库） | 非标准 benchmark |
 | **量化/部署框架** | NVIDIA **TensorRT-Edge-LLM v0.9.0** @ `1ac0f2b9…`（2026-07-02） | https://github.com/NVIDIA/TensorRT-Edge-LLM | Orin 建引擎/运行即此 commit（实测 `git rev-parse`）。**Kaggle 量化/导出用 `git clone --depth 1`（main@运行日，未 pin）** → 建议同 pin v0.9.0 |
@@ -96,12 +133,12 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 |---|---|---|---|
 | **骨干** `--quantization` | fp8 / int4_awq / nvfp4 / mxfp8 / int8_sq | 仅 **int4_awq**、**int8_sq** | ✅ 两者都已部署实测 |
 | **lm_head** `--lm_head_quantization` | fp8 / int4_awq / nvfp4 / mxfp8 | **int4_awq** ✅ | ✅ **本轮执行**（decode 字节 −19%，预测 +23%） |
-| **视觉塔** `--visual_quantization` | **仅 fp8** | ❌ | **死路**：fp8 需 sm_89+，Orin 是 sm_87 |
+| **视觉编码器** `--visual_quantization` | **仅 fp8** | ❌ | **死路**：fp8 需 sm_89+，Orin 是 sm_87 |
 | **KV cache** `--kv_cache_quantization` | **仅 fp8** | ❌ | **死路**：同上 |
 | **W4A8**（roofline 指出的 prefill 提速路径） | **工具中不存在**（全仓库 grep 无命中） | ❌ | **死路**：需上游支持 |
 
 三条死路的意义：
-1. **视觉塔 INT8 不可能**（不只是"要回云端"，而是工具只给 fp8、硬件又不支持 fp8）。视觉塔占 TTFT 的
+1. **视觉编码器 INT8 不可能**（不只是"要回云端"，而是工具只给 fp8、硬件又不支持 fp8）。视觉编码器占 TTFT 的
    19–25% 却只能停在 fp16 —— 这是**工具链+硬件共同造成的硬上限**，不是我们没做。
 2. **KV cache 量化不可用** ⇒ 长上下文下减少 decode 字节的另一条路也封了。
 3. **W4A8 不存在** ⇒ roofline 推出的"让 prefill 也提速"的唯一方案在本工具链上无法实施；
@@ -148,10 +185,10 @@ llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iteratio
 |---|---|
 | 校准集 | **`cnn_dailymail` config 3.0.0,train split 前 512 篇 `article`**(通用英文新闻文本；https://huggingface.co/datasets/cnn_dailymail ) |
 | 校准样本数 | **512**(`--num_samples` 默认) |
-| 校准路径 | **纯文本** `_text_calib_dataloader`(不走视觉塔;calib batch:AWQ=16 / SmoothQuant=1) |
+| 校准路径 | **纯文本** `_text_calib_dataloader`(不走视觉编码器;calib batch:AWQ=16 / SmoothQuant=1) |
 | INT4 (AWQ, W4A16) | 权重 4bit group-wise + 激活 16bit;用校准算**激活感知 per-channel pre-quant scales**,保护显著权重通道 |
 | INT8 (SmoothQuant, W8A8) | 权重 8bit + 激活 8bit;用校准的**激活统计**算 smoothing scales,把激活离群值迁移进权重 |
-| 视觉塔 | **未量化**(工具仅支持 fp8/fp16,两版都留 fp16)→ 多模态视觉路径不受 LLM 量化影响 |
+| 视觉编码器 | **未量化**(工具仅支持 fp8/fp16,两版都留 fp16)→ 多模态视觉路径不受 LLM 量化影响 |
 
 ### 影响分析（已做消融，见 `eval/accuracy/ablation_calibration/`）
 - **原假设**:新闻域校准与部署域错配 → 拖累 INT8(W8A8 连激活也量化,对校准更敏感)。

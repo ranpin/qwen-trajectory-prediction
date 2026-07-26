@@ -38,7 +38,7 @@ df -h /home
 ## Phase 2 — 传产物到 goat（ONNX，走内网）
 从 orin-dog 直接 scp（或从本地 `alpamayo-edge/outputs/`）：
 ```bash
-# fp16(必需) + int4/int8(跨设备复现用) + 视觉塔 + 基准帧
+# fp16(必需) + int4/int8(跨设备复现用) + 视觉编码器 + 基准帧
 scp vision@30.245.40.99:/home/vision/edge_fp16_llm.tgz .          # 12G
 scp vision@30.245.40.99:/home/vision/edge_artifacts_int4_awq.tgz .
 scp -r vision@30.245.40.99:/home/vision/edge_int8 .

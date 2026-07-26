@@ -1,26 +1,124 @@
 {
-  "device": "orin-dog (Jetson AGX Orin, sm_87, MAXN)",
-  "engines": {
-    "llm": "engines/int4/llm (INT4 AWQ, 4.847 GB)",
-    "visual": "engines/int4/visual (fp16, 1.168 GB, NOT quantized)"
+ "device": "orin-dog (Jetson AGX Orin, sm_87, MAXN)",
+ "engines": {
+  "llm": "engines/int4/llm (INT4 AWQ, 4.847 GB)",
+  "visual": "engines/int4/visual (fp16, 1.168 GB, NOT quantized)"
+ },
+ "method": "llm_inference --dumpProfile --warmup 1, TRT-reported GPU time per stage; frames = robovqa_0_*.jpg at <=448px",
+ "note_plugin": "EDGELLM_PLUGIN_PATH must be exported explicitly; ~/.bashrc returns early for non-interactive shells, and the relative fallback path only resolves when cwd is the TensorRT-Edge-LLM dir",
+ "per_frame_image_tokens": 112,
+ "runs": [
+  {
+   "frames": 1,
+   "image_tokens": 112,
+   "vision_ms": 29.05,
+   "prefill_tokens": 189,
+   "prefill_ms": 121.58,
+   "peak_unified_mem_mb": 4856.7
   },
-  "method": "llm_inference --dumpProfile --warmup 1, TRT-reported GPU time per stage; frames = robovqa_0_*.jpg at <=448px",
-  "note_plugin": "EDGELLM_PLUGIN_PATH must be exported explicitly; ~/.bashrc returns early for non-interactive shells, and the relative fallback path only resolves when cwd is the TensorRT-Edge-LLM dir",
-  "per_frame_image_tokens": 112,
-  "runs": [
-    {"frames": 1, "image_tokens": 112, "vision_ms": 29.05, "prefill_tokens": 189, "prefill_ms": 121.58, "peak_unified_mem_mb": 4856.70},
-    {"frames": 2, "image_tokens": 224, "vision_ms": 51.33, "prefill_tokens": 303, "prefill_ms": 195.96, "peak_unified_mem_mb": 4856.78},
-    {"frames": 4, "image_tokens": 448, "vision_ms": 93.52, "prefill_tokens": 531, "prefill_ms": 336.43, "peak_unified_mem_mb": 4855.91},
-    {"frames": 6, "image_tokens": 672, "vision_ms": 146.17, "prefill_tokens": 759, "prefill_ms": 446.41, "peak_unified_mem_mb": 4856.47}
-  ],
-  "repeatability": "6-frame vision encoder measured 144.52 ms and 146.17 ms on two runs (1.1% apart)",
-  "constraints": {
-    "llm_maxInputLen": 1024,
-    "implication": "112 image tokens/frame => at most 8 frames (896 tokens) plus a short prompt fit; 9+ frames requires rebuilding the LLM engine with a larger maxInputLen"
+  {
+   "frames": 2,
+   "image_tokens": 224,
+   "vision_ms": 51.33,
+   "prefill_tokens": 303,
+   "prefill_ms": 195.96,
+   "peak_unified_mem_mb": 4856.78
   },
-  "caveats": {
-    "decode_number_unused": "llm_inference reports 'Average Time per Token: ~16.3 ms' for generation, but that divides a single decode step's GPU time (32.93 ms) by 'Generated Tokens: 2' (which counts the prefill-produced first token). 32.93 ms matches llm_bench's 33.13 ms E2E TPOT, so TPOT is reported from llm_bench, not from this field.",
-    "peak_memory_scope": "Peak unified memory is ~4856 MB regardless of frame count and ~equals the LLM engine size alone, so this counter appears to exclude the separately-loaded visual engine; reported verbatim, scope not confirmed.",
-    "int8_vision_blocked": "visual_build exposes no precision flag (only onnxDir/engineDir/token limits) => the vision tower's fp16 precision is fixed by the exported ONNX. Quantizing it requires re-exporting in the cloud (Kaggle), which needs the HF/Kaggle credentials pending rotation."
+  {
+   "frames": 4,
+   "image_tokens": 448,
+   "vision_ms": 93.52,
+   "prefill_tokens": 531,
+   "prefill_ms": 336.43,
+   "peak_unified_mem_mb": 4855.91
+  },
+  {
+   "frames": 6,
+   "image_tokens": 672,
+   "vision_ms": 146.17,
+   "prefill_tokens": 759,
+   "prefill_ms": 446.41,
+   "peak_unified_mem_mb": 4856.47
   }
+ ],
+ "repeatability": "6-frame vision encoder measured 144.52 ms and 146.17 ms on two runs (1.1% apart)",
+ "constraints": {
+  "llm_maxInputLen": 1024,
+  "implication": "112 image tokens/frame => at most 8 frames (896 tokens) plus a short prompt fit; 9+ frames requires rebuilding the LLM engine with a larger maxInputLen"
+ },
+ "caveats": {
+  "decode_number_unused": "llm_inference reports 'Average Time per Token: ~16.3 ms' for generation, but that divides a single decode step's GPU time (32.93 ms) by 'Generated Tokens: 2' (which counts the prefill-produced first token). 32.93 ms matches llm_bench's 33.13 ms E2E TPOT, so TPOT is reported from llm_bench, not from this field.",
+  "peak_memory_scope": "Peak unified memory is ~4856 MB regardless of frame count and ~equals the LLM engine size alone, so this counter appears to exclude the separately-loaded visual engine; reported verbatim, scope not confirmed.",
+  "int8_vision_blocked": "visual_build exposes no precision flag (only onnxDir/engineDir/token limits) => the vision tower's fp16 precision is fixed by the exported ONNX. Quantizing it requires re-exporting in the cloud (Kaggle), which needs the HF/Kaggle credentials pending rotation."
+ },
+ "vision_encoder_config": {
+  "source": "engines/int4/visual/config.json on orin-dog (exported by TRTEdge visual_build)",
+  "model_type": "qwen3_vl_vision",
+  "depth": 27,
+  "hidden_size": 1152,
+  "num_heads": 16,
+  "intermediate_size": 4304,
+  "hidden_act": "gelu_pytorch_tanh",
+  "patch_size": 16,
+  "temporal_patch_size": 2,
+  "spatial_merge_size": 2,
+  "out_hidden_size": 4096,
+  "num_position_embeddings": 2304,
+  "deepstack_visual_indexes": [
+   8,
+   16,
+   24
+  ],
+  "dtype": "float16",
+  "builder_config": {
+   "max_image_tokens": 1024,
+   "max_image_tokens_per_image": 512,
+   "min_image_tokens": 4
+  },
+  "params_from_engine_size": "1167925844 B / 2 B per fp16 param = 583.96 M params",
+  "params_analytic": "27 layers x (4*1152^2 + 2*1152*4304) = 411.1 M backbone; + patch embed 1.77 M + pos embed 2.65 M + merger + 3 deepstack mergers ~= 0.58 B total (agrees with the engine-derived 584 M to ~1.4%)"
+ },
+ "preprocessing": {
+  "our_step": "sample 6 frames uniformly per benchmark video, resize long side to 448 px keeping aspect ratio",
+  "actual_frame_sizes_measured": {
+   "448x252": 1020,
+   "448x358": 240,
+   "note": "1260 jpgs = 210 items x 6 frames, measured with PIL on orin-dog:~/bench/frames"
+  },
+  "processor": "Qwen2VLImageProcessor (engines/int4/visual/preprocessor_config.json): do_convert_rgb, bicubic resize (resample=3) to a multiple of patch_size*merge_size = 32 with total pixels in [100352, 2097152], rescale 1/255, normalize mean=std=0.5",
+  "resized_to": {
+   "448x252": "448x256",
+   "448x358": "448x352"
+  },
+  "patches": {
+   "448x256": "28x16 = 448 patches of 16x16",
+   "448x352": "28x22 = 616 patches"
+  },
+  "tokens_per_frame": {
+   "448x252": 112,
+   "448x358": 154,
+   "rule": "tokens = (W/32) x (H/32) after resize, because 2x2 spatial merge makes one token cover 32x32 px"
+  }
+ },
+ "runs_448x358_2026_07_26": {
+  "device": "orin-dog, INT4 engine, llm_inference --dumpProfile --warmup 1",
+  "frames": 6,
+  "image_tokens": 924,
+  "vision_ms": 195.68,
+  "prefill_tokens": 951,
+  "prefill_ms": 559.55,
+  "comparison_same_session_448x252": {
+   "image_tokens": 672,
+   "vision_ms": 138.05,
+   "prefill_tokens": 759,
+   "prefill_ms": 446.66
+  },
+  "reading": "vision time scales with patch count: 616/448 = 1.375x patches -> 195.68/138.05 = 1.42x time (0.212 vs 0.205 ms per output token). The 448x252 prefill reproduces the earlier sweep (446.66 vs 446.41 ms); the vision number is 5.6% below the earlier 146.17 ms, i.e. session-to-session variance, so the two shapes are compared within this session only."
+ },
+ "max_input_len_headroom_2026_07_26": {
+  "finding": "the worst-case request in the n=210 benchmark is 1015 tokens against the engine's maxInputLen=1024 -- 9 tokens of headroom",
+  "worst_item": "request_idx 94 (robovqa, 448x358 frames, 316-char question) -> measured 'Computed Tokens: 1015', 924 of them image tokens",
+  "implication": "the '<=8 frames' limit only holds for 448x252 frames (112 tok/frame). At 154 tok/frame (448x358) six frames already fill the engine; a 7th would overflow. No truncation warning appeared in the benchmark logs, and all 210 requests returned, so the published accuracies are unaffected -- but the margin was 0.9%.",
+  "how_measured": "llm_inference --engineDir engines/int4/llm --multimodalEngineDir engines/int4/visual --inputFile worst_req.json --dumpProfile (single request extracted from bench/orin_input.json)"
+ }
 }

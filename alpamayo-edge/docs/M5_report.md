@@ -23,7 +23,7 @@
 > **横轴**：上下文长度(past-KV token 数，128→4000)<br>**竖轴**：INT4 decode 吞吐(tokens/秒)<br>**结果**：上下文涨 31× 吞吐仅降 9%<br>**分析**：decode 延迟由权重搬运主导、注意力占比小，故长上下文几乎不掉速 ⇒ 适合长对话/长文档
 
 ![footprint](figures/footprint.png)
-> **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br>**竖轴**：体积(GB)<br>**结果**：INT4 比 INT8 约省 42%<br>**分析**：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉塔)；省下的显存可留给更长 KV cache 或多模型并存
+> **横轴**：三类产物(Orin LLM 引擎 / 打包 tgz / 载入显存)<br>**竖轴**：体积(GB)<br>**结果**：INT4 比 INT8 约省 42%<br>**分析**：LLM 主干 INT8≈INT4 的 1.7×(近 W8A8 vs W4A16 理论 2×，差在共享 fp16 词嵌入/视觉编码器)；省下的显存可留给更长 KV cache 或多模型并存
 
 ![serving metrics](figures/serving_metrics.png)
 > **横轴**：左=TTFT/TPOT×三精度，右=三精度<br>**竖轴**：左=延迟(ms)，右=E2E(s)<br>**结果**：decode INT4 比 FP16 快 **2.66×**、INT8 1.70×；E2E(512+128) 11.7→4.6s(2.5×)<br>**分析**：FP16 基线经 64GB goat 补全(dog build 期 OOM,峰值 54.8GB);引擎同 sm_87 可拷回 dog 跑。跨设备 INT4/INT8 <3% 复现
@@ -56,7 +56,7 @@
 ### 2.2 方法细节（配置与口径）
 
 - **模型/权重**：`nvidia/Cosmos-Reason2-8B`（HF 门控，NVIDIA 预训练；**只量化不训练**）。36 层·hidden 4096·GQA 32/8·RoPE 262144·vocab 151936（**Qwen3-VL-8B-Instruct** 系 backbone）。
-- **量化**：ModelOpt PTQ。INT4=AWQ(W4A16)、INT8=SmoothQuant(W8A8)。**校准集 = 默认 512 篇 CNN/DailyMail 新闻文本（非驾驶域，重要 caveat）**；视觉塔未量化保 fp16。
+- **量化**：ModelOpt PTQ。INT4=AWQ(W4A16)、INT8=SmoothQuant(W8A8)。**校准集 = 默认 512 篇 CNN/DailyMail 新闻文本（非驾驶域，重要 caveat）**；视觉编码器未量化保 fp16。
 - **数据**：精度 = 12 条手写 prompt（无标注、非 benchmark）；性能 = llm_bench 合成序列。
 - **指标**：延迟/吞吐 = llm_bench E2E（mean±std, warmup3+iter10）；功耗 = tegrastats 三轨和；能效 = TPS÷W；掉点 = FP16 模型 teacher-forced perplexity + token 一致率。
 - 完整定义、命令、校准影响分析见 **[METHODOLOGY.md](METHODOLOGY.md)**。

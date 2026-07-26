@@ -38,7 +38,7 @@ cd /home/vision/TensorRT-Edge-LLM
 # 本机已默认正确（软链+bashrc）；换环境时显式指定：
 export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so
 
-# 建引擎（~90s；两量化可共享同一份 fp16 视觉塔引擎）
+# 建引擎（~90s；两量化可共享同一份 fp16 视觉编码器引擎）
 ./build_orin/examples/llm/llm_build            --onnxDir <onnx>/llm    --engineDir <engines>/llm
 ./build_orin/examples/multimodal/visual_build  --onnxDir <onnx>/visual --engineDir <engines>   # 输出到 <engines>/visual/
 
@@ -46,7 +46,7 @@ export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so
 ./build_orin/examples/llm/llm_bench --engineDir /home/vision/engines/int4/llm --mode prefill --inputLen 512 --iterations 5  --warmup 2
 ./build_orin/examples/llm/llm_bench --engineDir /home/vision/engines/int4/llm --mode decode  --pastKVLen 512 --iterations 20 --warmup 3
 
-# 功能：真实生成（VLM 引擎需带视觉塔，即使纯文本；VLM 图像路径还额外强制 --outputFile）
+# 功能：真实生成（VLM 引擎需带视觉编码器，即使纯文本；VLM 图像路径还额外强制 --outputFile）
 ./build_orin/examples/llm/llm_inference --engineDir /home/vision/engines/int4/llm \
   --multimodalEngineDir /home/vision/engines/int4/visual \
   --inputFile /home/vision/cosmos_input.json --dumpOutput --maxGenerateLength 128
@@ -80,7 +80,7 @@ export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so
 | SDK 下载反复断（GB 级） | `.content` 整文件进内存、无断点续传 | 抽签名 URL + `curl -C -` 可续传循环；SHA256 + `gzip -t` 校验 |
 | **推理崩 `There must be one kernel to implement the MHA`** | **构建漏传 `-DEMBEDDED_TARGET=jetson-orin`**，sm_87 FMHA kernel 被编译排除（详见下节） | 按上面正确配方重编 |
 | bench 报 `Cuda Runtime (out of memory)`（int8） | bench 把 8.2GB 引擎加载两次，撞 29GB 统一内存上限 | **非致命**：TRT 回退统一内存后继续；功能单次加载正常，性能数稳定可复现 |
-| `--multimodalEngineDir is required` | 引擎是 Qwen3VL VLM，`llm_inference` 即使纯文本也强制要视觉塔 | 传 `--multimodalEngineDir <visual 引擎目录>` |
+| `--multimodalEngineDir is required` | 引擎是 Qwen3VL VLM，`llm_inference` 即使纯文本也强制要视觉编码器 | 传 `--multimodalEngineDir <visual 引擎目录>` |
 | `--outputFile is required`（图像输入） | VLM 图像路径强制落盘输出 | 传 `--outputFile` |
 
 ## FMHA 崩溃根因深挖（已解决）

@@ -55,6 +55,7 @@ print(f"INT4 decode bytes/token {BY_INT4/1e9:.3f} GB  -> lm_head {B_LMH:.1f}%")
 Q_F, Q_E = "#dbeafe", "#2563eb"     # quantized by us (INT4/INT8)
 F_F, F_E = "#fef3c7", "#d97706"     # still fp16 -> the identified headroom
 N_F, N_E = "#eef2f7", "#94a3b8"     # no weights / not in the LLM engine
+DS_E = "#7c3aed"                    # deepstack side path
 IO_F, IO_E = "#f1f5f9", "#64748b"   # I/O
 INNER = "#ffffff"
 
@@ -116,7 +117,7 @@ def note(y, letter, title, body, color):
 
 # ================= input =================
 box(LX + 1.0, 92.0, 24.0, 6.4,
-    "输入 ①　N 帧图像\n每帧缩放到 ≤ 448 px", IO_F, IO_E)
+    "输入 ①　N 帧图像\n长边 448 px → 32 的整数倍（见图 2）", IO_F, IO_E, fs=ANNOT + 0.5)
 box(LX + 27.5, 92.0, 24.0, 6.4,
     "输入 ②　文字问题\n（自然语言 prompt）", IO_F, IO_E)
 
@@ -124,17 +125,20 @@ box(LX + 27.5, 92.0, 24.0, 6.4,
 down(LX + 13.0, 92.0, 85.4)
 down(LX + 39.5, 92.0, 85.4)
 box(LX + 1.0, 78.0, 24.0, 7.4,
-    "视觉塔 ViT（fp16，未量化）\n≈ 0.58 B 参数 · 引擎 1.168 GB\n→ 每帧 112 image token",
+    "视觉编码器 ViT　qwen3_vl_vision\n27 层 · d=1152 · ≈0.58 B（fp16 未量化）\n"
+    "→ 每帧 112 token（448×256）",
     F_F, F_E, fs=ANNOT + 0.5)
 box(LX + 27.5, 78.0, 24.0, 7.4,
-    "Tokenizer + 词嵌入表\n151936 × 4096（fp16）\n单独文件，不在 LLM 引擎内",
+    "Qwen3 分词器 + 词嵌入表 151936×4096\n运行时 kernel 查表（不在 TRT 图内）\n"
+    "独立权重 embedding.safetensors 1.245 GB",
     N_F, N_E, fs=ANNOT + 0.5)
 
 tag(LX + 23.2, 83.8, "A", F_E)
-note(84.2, "A", "§1.7　视觉塔剖析（唯一仍 fp16 的计算部件）",
-     "耗时严格线性 4.5 + 23.2 ms×帧（R²=0.997），占 TTFT 19.3%→24.7%（1→6 帧）。\n"
+note(84.2, "A", "§1.7　视觉编码器剖析（唯一仍 fp16 的计算部件）",
+     "耗时随 patch 数线性：448×252 的 6 帧 = 4.5 + 23.2 ms×帧（R²=0.997），占 TTFT 19–25%。\n"
      "visual_build 无精度开关 ⇒ 想量化必须回云端重导 ONNX（已实测确认，本地无路）。\n"
-     "硬约束：112 token/帧 + 引擎 maxInputLen=1024 ⇒ 最多 8 帧（AV 6–8 路相机正卡在此）。",
+     "帧数上限取决于帧形状：112 token/帧 ⇒ 8 帧；154 token/帧（448×352）⇒ 6 帧就到顶\n"
+     "（实测最长请求 1015 / maxInputLen 1024，只剩 9 个 token；见图 2 下半）。",
      F_E)
 
 # ================= concat =================
@@ -151,6 +155,13 @@ box(LX + 1.0, DY, 50.5, DH, "", Q_F, Q_E, z=2)
 ax.text(LX + 26.0, DY + DH - 2.6,
         "LLM Decoder × 36 层　—　本项目量化的全部对象",
         ha="center", va="center", fontsize=BASE, fontweight="bold", color=Q_E)
+
+# ---- deepstack: 3 side features from the ViT into the first 3 layers -----
+ax.annotate("", xy=(LX + 6.0, DY + DH - 5.0), xytext=(LX + 6.0, 78.0),
+            arrowprops=dict(arrowstyle="-|>", lw=1.0, color=DS_E,
+                            linestyle="--", shrinkA=0, shrinkB=0))
+ax.text(LX + 6.9, 67.9, "DeepStack：ViT 第 8/16/24 层的 3 路特征\n注入 decoder 前 3 层（见图 1）",
+        ha="left", va="center", fontsize=ANNOT - 0.5, color=DS_E)
 
 box(LX + 3.5, DY + 29.4, 45.5, 3.4, "RMSNorm", INNER, "#c7d2df", fs=ANNOT, z=3)
 box(LX + 3.5, DY + 18.6, 45.5, 9.8,
