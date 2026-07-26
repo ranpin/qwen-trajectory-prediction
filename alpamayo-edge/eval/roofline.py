@@ -16,7 +16,7 @@ against the measured engine size (a self-consistency test, not an assumption):
   36 layers * 192.94 M = 6.946 B ; + lm_head 151936*4096 = 0.622 B
   => 7.575 B matmul params ; 7.575 B * 2 B/param = 15.15 GB == measured FP16
      engine size (docs/edge_deploy_status.md). Adding the input embedding table
-     (0.622 B, shipped as a separate fp16 file) and the vision tower (~0.58 B)
+     (0.622 B, shipped as a separate fp16 file) and the vision encoder (~0.58 B)
      reproduces the 8.77 B total that NVIDIA publishes for the checkpoint.
 
 HARDWARE — NVIDIA primary sources (see docs/METHODOLOGY.md for URLs):

@@ -80,7 +80,7 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 
 喂 `woman_and_dog.jpeg` + 提问，走**视觉编码器 + deepstack 融合 + INT4 LLM** 全路径，模型准确描述海滩场景（女子格子衫、狗戴彩色胸背带、海浪、日落暖光），与官方参照吻合 → VLM 本职能力在 Orin 上端到端正确。
 
-## 量化掉点（vs FP16 基线）✅
+## 量化精度损失（vs FP16 基线）✅
 
 ### 主：真实基准任务正确率（Cosmos-Reason1-Benchmark robovqa+robofail，n=210 MC 带标准答案）
 
@@ -92,7 +92,7 @@ Kaggle(T4x2) 量化+导出 → 打包 → 下载/校验 → scp 到 Orin → TRT
 | 总体 Wilson 95%CI | [70.0,81.4] | [67.5,79.3] | [69.0,80.6] |
 | 总体 vs FP16（McNemar） | — | −2.4pts p=0.42 不显著 | −1.0pts p=0.85 不显著 |
 
-视频按 6 帧(≤448px)采样作多图，FP16(云端 PyTorch)/INT8/INT4(Orin) **同帧**→掉点严格可比。**统计检验:CI 重叠、McNemar p>0.4 → 差异不显著(n=210；robovqa 88.2%+robofail 63%)** → 稳妥结论是**量化无显著任务正确率损失**(非精确"掉 0.9pts")。方法/口径见 [METHODOLOGY.md](METHODOLOGY.md) §3.3；产物 `eval/accuracy/benchmark/`。robovqa 子集(具身机器人推理，非驾驶)、6帧@448 非官方原生视频协议——绝对分不追求复现论文。
+视频按 6 帧(≤448px)采样作多图，FP16(云端 PyTorch)/INT8/INT4(Orin) **同帧**→精度损失严格可比。**统计检验:CI 重叠、McNemar p>0.4 → 差异不显著(n=210；robovqa 88.2%+robofail 63%)** → 稳妥结论是**量化无显著任务正确率损失**(非精确"掉 0.9pts")。方法/口径见 [METHODOLOGY.md](METHODOLOGY.md) §3.3；产物 `eval/accuracy/benchmark/`。robovqa 子集(具身机器人推理，非驾驶)、6帧@448 非官方原生视频协议——绝对分不追求复现论文。
 
 > **FP16 基线（经 64GB orin-goat 补全）+ 量化加速比**：FP16 引擎在 32GB dog `llm_build` 期 OOM（**峰值实测 54.8GB**，远超 30GB；运行时激活仅 8MB → 是 build 内存墙、非推理）。改在 **64GB orin-goat** build+跑得同机三方：TTFT FP16 298 / INT8 159 / INT4 305 ms，TPOT FP16 89.3 / INT8 52.4 / INT4 33.6 ms。**decode 加速 vs FP16：INT4 2.66×、INT8 1.70×；prefill：INT8 1.87×、INT4≈FP16；E2E(512+128) 11.7→4.6s(2.5×)**。**实测:FP16 引擎(15GB)在 32GB dog 连载入都 OOM**(deserialize 申请 15GB 时仅 ~11GB free,引擎文件页缓存吃满)→ FP16 build 与 load 在 32GB 上双双不可行,只在 64GB goat 跑;dog 部署 INT4/INT8。跨设备 INT4/INT8 两机 <3% 已复现。**能效(goat 同机,tok/J)**:decode FP16 0.42/INT8 0.90/INT4 1.31 → INT4 decode 能效比 FP16 高 **3.1×**;prefill FP16 30.1/INT8 62.0/INT4 26.9。详见 `eval/perf/fp16_speedup_goat.json`、[orin_goat_migration_plan.md](orin_goat_migration_plan.md)。
 
@@ -111,14 +111,14 @@ FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（O
 | 与 FP16 贪心一致前缀占比 | 100% | 16.4% | 5.7% |
 | 平均一致前缀长度 (token) | — | 20.1 | 7.2 |
 
-- **关键发现**：INT4 (AWQ) 掉点**反而小于** INT8 (SmoothQuant)（+9.8% vs +18.1%），贪心路径也跟随更久。合理——AWQ 是激活感知的纯权重 4bit（W4A16），保留输出分布更好；INT8 SmoothQuant 为 W8A8、连激活也量化，本推理负载上对分布扰动更大。与"decode 看 INT4"的性能结论方向一致：**INT4 在本工作负载既快（decode）又更保真**。
+- **关键发现**：INT4 (AWQ) 精度损失**反而小于** INT8 (SmoothQuant)（+9.8% vs +18.1%），贪心路径也跟随更久。合理——AWQ 是激活感知的纯权重 4bit（W4A16），保留输出分布更好；INT8 SmoothQuant 为 W8A8、连激活也量化，本推理负载上对分布扰动更大。与"decode 看 INT4"的性能结论方向一致：**INT4 在本工作负载既快（decode）又更保真**。
 - **诚实边界**：① 该 PPL 是对模型**自身贪心输出**的 teacher-forced 打分，绝对值偏低（高概率序列），**有意义的是相对增幅**而非绝对值。② 分数对比的是**已部署的 Orin TRT 引擎**输出 vs **FP16 PyTorch**，因此捕获的是"量化+引擎实现+后端"的**总部署差距**（也正是实用相关的量——相比原始模型你实际损失多少），而非纯量化误差；token 一致前缀偏低正是贪心下后端差异逐 token 累积所致，故 perplexity 为主指标、一致率为辅证。③ 参考用 T4 上 fp16 加载，与 Orin fp16 派生引擎口径一致。
 
 ## Roofline 分析（2026-07-25 新增）
 
 把实测工作点投到 Orin 的 roofline（`eval/roofline.py` → `docs/figures/roofline.png`）上，三个反常点都有了定量解释：
 
-| 精度 | Decode AI | Decode 实测带宽（占 204.8 GB/s） | Prefill AI | Prefill 实测吞吐（占天花板） | 天花板 |
+| 精度 | Decode AI | Decode 实测带宽（占 204.8 GB/s） | Prefill AI | Prefill 实测吞吐（占上限） | 上限 |
 |---|---|---|---|---|---|
 | FP16 | 1.00 | 169.7 GB/s（**82.9%**） | 512 | 26.0 TFLOP/s（60.5%） | 43 TFLOP/s |
 | INT8 (SQ) | 1.83 | 158.3 GB/s（77.3%） | 935 | 48.7 TOP/s（57.3%） | **85 TOP/s** 原生 int8 |
@@ -126,9 +126,9 @@ FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（O
 
 - 脊点 = 43 TFLOP/s ÷ 204.8 GB/s ≈ **210 FLOP/byte**。decode 的 AI 只有 1.0–3.2，**低于脊点 67–210×** → 纯访存墙。
 - ⇒ **INT4 decode 的加速上限就是字节比 15.15/4.8 = 3.16×**；实测 2.66× 的缺口来自带宽效率随权重变小而降（82.9% → 69.7%，固定开销占比上升）。**decode 已达峰值带宽 70–83%，几无 kernel 优化空间**，要更快只能继续压字节（更低位宽 / KV cache 量化 / 稀疏）。
-- prefill 的 AI 远高于脊点 → 计算墙。**W4A16 的天花板是 FP16 的 43 TFLOP/s 而非 INT8 的 85 TOP/s**（TensorRT WoQ 先反量化再做高精度点积，官方文档明示），所以 **INT4 prefill 结构上不可能快过 FP16**（25.5 vs 26.0 TFLOP/s，实测吻合）；INT8(W8A8) 用原生 int8 核、天花板翻倍，才有 1.87×。
+- prefill 的 AI 远高于脊点 → 计算墙。**W4A16 的上限是 FP16 的 43 TFLOP/s 而非 INT8 的 85 TOP/s**（TensorRT WoQ 先反量化再做高精度点积，官方文档明示），所以 **INT4 prefill 结构上不可能快过 FP16**（25.5 vs 26.0 TFLOP/s，实测吻合）；INT8(W8A8) 用原生 int8 核、上限翻倍，才有 1.87×。
 - ⇒ 想让 INT4 的 prefill 也提速，必须上 **W4A8** 之类"激活也量化"的方案，让 GEMM 真跑在低精度张量核上。
-- 口径：算力天花板均为 **GPU 稠密**值、**不含 DLA**；NVIDIA 宣传的 275 TOPS = GPU 稀疏 170 + 双 DLA 稀疏 105，GPU-only 稠密仅为其 31%。模型侧 7.575 B 矩阵乘参数由 config 解析推出，×2 B = 15.15 GB 与实测 FP16 引擎大小自校验一致。
+- 口径：算力上限均为 **GPU 稠密**值、**不含 DLA**；NVIDIA 宣传的 275 TOPS = GPU 稀疏 170 + 双 DLA 稀疏 105，GPU-only 稠密仅为其 31%。模型侧 7.575 B 矩阵乘参数由 config 解析推出，×2 B = 15.15 GB 与实测 FP16 引擎大小自校验一致。
 
 ## Kernel 级剖析（Nsight Systems，2026-07-25 新增）
 
@@ -154,7 +154,7 @@ FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（O
 
 | 优化 | 字节 | 预测 TPOT / 吞吐 | 代价 |
 |---|---|---|---|
-| A. lm_head 也量化到 INT4 | 4.853 → **3.932 GB**（−19%） | 33.1 → **≈26.8 ms**，30.2 → **≈37.3 tok/s（+23%）** | 输出层对量化敏感，需实测掉点 |
+| A. lm_head 也量化到 INT4 | 4.853 → **3.932 GB**（−19%） | 33.1 → **≈26.8 ms**，30.2 → **≈37.3 tok/s（+23%）** | 输出层对量化敏感，需实测精度损失 |
 | B. 手写 W4A16 GEMV，带宽 72.2%→85% | 不变 | 33.1 → ≈30.2 ms（**+10%**） | 工程量；需做成 TRT plugin 才端到端生效 |
 | A+B | −19% | **≈24.5 ms（+35%）** | — |
 
@@ -178,16 +178,16 @@ FP16 参考在 Kaggle T4×2 上用 PyTorch 加载 `nvidia/Cosmos-Reason2-8B`（O
 decode 真正的杠杆只剩**减少字节数**（优化 A：量化 lm_head，预测 +23%）。
 
 三条工程教训：
-1. **优化前先量天花板**，否则会对着理论峰值虚构出 28% 的余量。
+1. **优化前先量上限**，否则会对着理论峰值虚构出 28% 的余量。
 2. **v2/v3 把 32-bit load 换成 128-bit 反而更慢**——瓶颈不是 DRAM，而是逐元素重复读 `x` 与标量 int→fp16 转换；
    v4 把 x 放进 shared memory（block 内 8 warp 复用）+ half2 后才快 1.4–4×。与 TRT 仍差 1.87×，
    补齐需 AWQ/FT 的 `lop3` 位技巧（直接拼 fp16 尾数免转换）+ 权重离线置换（TRT 已做），但因结论 1 不再投入。
 3. **Jetson 按负载调 GPU/EMC 频率、`jetson_clocks` 需 root（不可用）**：计时前须持续预热（本基准跑 400 次）再取最优；
-   否则短脉冲测得的天花板只有 104.9 GB/s（偏低 30%，首版就踩了这个坑）。
+   否则短脉冲测得的上限只有 104.9 GB/s（偏低 30%，首版就踩了这个坑）。
 
 ## 视觉编码器剖析与多相机扩展性（2026-07-25 新增）
 
-产物 `eval/vision/`（RESULTS.json + vision_viz.py），图 `docs/figures/vision_tower.png`。
+产物 `eval/vision/`（RESULTS.json + vision_viz.py），图 `docs/figures/vision_encoder.png`。
 方法：`llm_inference --dumpProfile --warmup 1`，取 TRT 自报的分段 GPU 时间；帧取 robovqa_0_*.jpg（≤448px）。
 
 | 帧数 | image token | 视觉编码器 (ms) | prefill token | prefill (ms) | TTFT (ms) | 视觉编码器占比 |
@@ -244,7 +244,7 @@ TRTEdge 有现成开关 `--lm_head_quantization int4_awq`，但**在 2×T4 上�
 
 ## 部署选型结论
 
-- **交互式 / 单流低延迟 / 省电续航 / 精度敏感** → **INT4**：decode 吞吐高 57%、能效高 64%、显存省 42%，且掉点更小（PPL +9.8% vs +18.1%）。
+- **交互式 / 单流低延迟 / 省电续航 / 精度敏感** → **INT4**：decode 吞吐高 57%、能效高 64%、显存省 42%，且精度损失更小（PPL +9.8% vs +18.1%）。
 - **批量 / 长上下文 / 高吞吐** → **INT8**：prefill 快 1.9×、能效高 2.3×、功耗还更低（代价是本负载上分布保真略逊）。
 - 一句话：**decode 看 INT4，prefill 看 INT8**——两者在不同阶段各自既更快又更省电；两版功能均可用，且 **INT4 在本工作负载既更快（decode）又更保真**。
 
@@ -255,8 +255,8 @@ TRTEdge 有现成开关 `--lm_head_quantization int4_awq`，但**在 2×T4 上�
 | 1 | 功耗 / 能效测量 | ✅ 完成（见上） |
 | 4 | 多模态图像路径 | ✅ 完成（见上） |
 | 5 | 吞吐 / 上下文 sweep | ✅ 完成（见上） |
-| 2 | FP16 基线（补精度-延迟-功耗第三点） | ✅ 完成（Kaggle T4×2 fp16 参考，见"量化掉点"节） |
-| 3 | 量化掉点定量评测（vs FP16 基线） | ✅ 完成——PPL 增幅 INT4 +9.8% / INT8 +18.1% + token 一致率 |
+| 2 | FP16 基线（补精度-延迟-功耗第三点） | ✅ 完成（Kaggle T4×2 fp16 参考，见"量化精度损失"节） |
+| 3 | 量化精度损失定量评测（vs FP16 基线） | ✅ 完成——PPL 增幅 INT4 +9.8% / INT8 +18.1% + token 一致率 |
 | 7 | VLA 轨道 M2b（Alpamayo-R1-10B FP16 轨迹 + CVM） | ⏸ 暂缓——大工程，见 [plan.md](plan.md) |
 | 6 | 运维收尾（build_orin 设默认 / 清旧 build） | ✅ 完成——删旧坏 build、`build→build_orin` 软链、`~/.bashrc` 持久化 EDGELLM_PLUGIN_PATH，默认即正确插件（上游报 issue 仍暂缓） |
 

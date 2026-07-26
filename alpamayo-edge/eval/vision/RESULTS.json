@@ -49,7 +49,7 @@
  "caveats": {
   "decode_number_unused": "llm_inference reports 'Average Time per Token: ~16.3 ms' for generation, but that divides a single decode step's GPU time (32.93 ms) by 'Generated Tokens: 2' (which counts the prefill-produced first token). 32.93 ms matches llm_bench's 33.13 ms E2E TPOT, so TPOT is reported from llm_bench, not from this field.",
   "peak_memory_scope": "Peak unified memory is ~4856 MB regardless of frame count and ~equals the LLM engine size alone, so this counter appears to exclude the separately-loaded visual engine; reported verbatim, scope not confirmed.",
-  "int8_vision_blocked": "visual_build exposes no precision flag (only onnxDir/engineDir/token limits) => the vision tower's fp16 precision is fixed by the exported ONNX. Quantizing it requires re-exporting in the cloud (Kaggle), which needs the HF/Kaggle credentials pending rotation."
+  "int8_vision_blocked": "visual_build exposes no precision flag (only onnxDir/engineDir/token limits) => the vision encoder's fp16 precision is fixed by the exported ONNX. Quantizing it requires re-exporting in the cloud (Kaggle), which needs the HF/Kaggle credentials pending rotation."
  },
  "vision_encoder_config": {
   "source": "engines/int4/visual/config.json on orin-dog (exported by TRTEdge visual_build)",

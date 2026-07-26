@@ -22,7 +22,7 @@ sweep/多模态全套指标。详见 **[docs/edge_deploy_status.md](docs/edge_de
 | [docs/orin_build_notes.md](docs/orin_build_notes.md) | **工程日志**：正确 Orin 构建配方、复现命令、全部踩坑、FMHA 崩溃根因深挖 |
 | [docs/orin_goat_migration_plan.md](docs/orin_goat_migration_plan.md) | **64GB orin-goat 迁移计划**：补 FP16 性能基线 + 跨设备复现（32GB 机 FP16 build OOM 的解法） |
 | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | **方法与可复现性**：模型/权重来源、数据集、指标定义与测法、**量化校准集(cnn_dailymail 512)及影响分析** |
-| [eval/accuracy/](eval/accuracy/) | 量化掉点评测产物：prompts + Orin 输出 + FP16 参考 + 汇总脚本 |
+| [eval/accuracy/](eval/accuracy/) | 量化精度损失评测产物：prompts + Orin 输出 + FP16 参考 + 汇总脚本 |
 | [docs/plan.md](docs/plan.md) | 项目计划、里程碑（M0–M5 状态）、目录结构、风险 |
 | [docs/FINDINGS.md](docs/FINDINGS.md) | 选型背景（Alpamayo 只支持 FP16 等三条硬事实，已定案） |
 | [docs/M0_setup.md](docs/M0_setup.md) | 两端环境搭建命令（导出主机 + Orin） |
@@ -38,7 +38,7 @@ cd /home/vision/TensorRT-Edge-LLM
 # 性能
 ./build_orin/examples/llm/llm_bench --engineDir engines/int4/llm --mode prefill --inputLen 512 --iterations 5  --warmup 2
 ./build_orin/examples/llm/llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iterations 20 --warmup 3
-# 功能（VLM 需带视觉塔）
+# 功能（VLM 需带视觉编码器）
 ./build_orin/examples/llm/llm_inference --engineDir engines/int4/llm \
   --multimodalEngineDir engines/int4/visual --inputFile cosmos_input.json --dumpOutput --maxGenerateLength 128
 ```

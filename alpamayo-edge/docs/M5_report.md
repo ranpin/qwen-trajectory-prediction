@@ -32,12 +32,12 @@
 > **横轴**：三种精度(FP16/INT8/INT4)<br>**竖轴**：真实基准 MC 任务正确率 %(绿虚线=FP16 76.2%)<br>**结果**：n=210(robovqa+robofail) FP16 76.2%、INT8 75.2%、INT4 73.8%（误差棒=Wilson 95%CI）<br>**分析**：CI 重叠、McNemar p>0.4 → 差异**统计不显著**，稳妥结论=**量化无显著任务正确率损失**。**另:FP16 引擎在 Orin build 期 OOM(16GB>29GB)→ 量化是部署必需**。
 
 ![accuracy drop-off](figures/accuracy_dropoff.png)
-> （辅助/细粒度）**横轴**：左=平均 perplexity，右=与 FP16 的一致性(一致前缀占比 % / 长度 token)<br>**竖轴**：左=perplexity(越低越贴近 FP16，虚线=FP16 基线 1.237)，右=百分比 / token 数<br>**结果**：INT4 掉点 +9.8% 小于 INT8 +18.1%<br>**分析**：INT4(W4A16 纯权重、激活留 16bit)对校准域错配更鲁棒，INT8(W8A8)连激活量化更敏感 → 掉点更大；本负载 INT4 既快又保真
+> （辅助/细粒度）**横轴**：左=平均 perplexity，右=与 FP16 的一致性(一致前缀占比 % / 长度 token)<br>**竖轴**：左=perplexity(越低越贴近 FP16，虚线=FP16 基线 1.237)，右=百分比 / token 数<br>**结果**：INT4 精度损失 +9.8% 小于 INT8 +18.1%<br>**分析**：INT4(W4A16 纯权重、激活留 16bit)对校准域错配更鲁棒，INT8(W8A8)连激活量化更敏感 → 精度损失更大；本负载 INT4 既快又保真
 
 | 场景 | 选 | 理由（实测） |
 |---|---|---|
-| 交互式 / 单流低延迟 / 省电 / 精度敏感 | **INT4** | decode 30.9 TPS（高 57%）、能效 0.82 tok/J（高 64%）、显存 ~4.6GB（省 42%）、掉点 +9.8% |
-| 批量 / 长上下文 / 高吞吐 | **INT8** | prefill 3252 TPS（快 1.9×）、能效 62.8 tok/J（高 2.3×）、功耗更低（掉点 +18.1%） |
+| 交互式 / 单流低延迟 / 省电 / 精度敏感 | **INT4** | decode 30.9 TPS（高 57%）、能效 0.82 tok/J（高 64%）、显存 ~4.6GB（省 42%）、精度损失 +9.8% |
+| 批量 / 长上下文 / 高吞吐 | **INT8** | prefill 3252 TPS（快 1.9×）、能效 62.8 tok/J（高 2.3×）、功耗更低（精度损失 +18.1%） |
 
 ![roofline](figures/roofline.png)
 > **横轴**：算术强度 AI（FLOP/byte，对数）<br>**竖轴**：可达吞吐（对数），斜线=带宽屋顶、平顶=算力屋顶<br>**结果**：decode 三精度贴带宽斜坡（实测 143–170 GB/s = 峰值 70–83%）；prefill 三精度在各自算力顶下 57–61%，INT4 贴 **FP16** 顶<br>**分析**：脊点 210 FLOP/byte；decode AI 1.0–3.2 → 硬访存墙，INT4 加速上限=字节比 3.16×；W4A16 反量化回 fp16 → INT4 prefill 结构上不可能快过 FP16，要提速需 W4A8
@@ -58,7 +58,7 @@
 - **模型/权重**：`nvidia/Cosmos-Reason2-8B`（HF 门控，NVIDIA 预训练；**只量化不训练**）。36 层·hidden 4096·GQA 32/8·RoPE 262144·vocab 151936（**Qwen3-VL-8B-Instruct** 系 backbone）。
 - **量化**：ModelOpt PTQ。INT4=AWQ(W4A16)、INT8=SmoothQuant(W8A8)。**校准集 = 默认 512 篇 CNN/DailyMail 新闻文本（非驾驶域，重要 caveat）**；视觉编码器未量化保 fp16。
 - **数据**：精度 = 12 条手写 prompt（无标注、非 benchmark）；性能 = llm_bench 合成序列。
-- **指标**：延迟/吞吐 = llm_bench E2E（mean±std, warmup3+iter10）；功耗 = tegrastats 三轨和；能效 = TPS÷W；掉点 = FP16 模型 teacher-forced perplexity + token 一致率。
+- **指标**：延迟/吞吐 = llm_bench E2E（mean±std, warmup3+iter10）；功耗 = tegrastats 三轨和；能效 = TPS÷W；精度损失 = FP16 模型 teacher-forced perplexity + token 一致率。
 - 完整定义、命令、校准影响分析见 **[METHODOLOGY.md](METHODOLOGY.md)**。
 
 ## 三、思考讨论
@@ -75,7 +75,7 @@
   量化**无显著任务正确率损失**(McNemar p>0.4)；**跨 32GB/64GB 两台 Orin 复现(<3%)**，并定位 FP16 无法在 32GB 机 build(峰值 55GB>30GB)→用 64GB 机 build、引擎拷回部署。
 - 定位并修复 sm_87 上的 FMHA kernel 派发崩溃：从崩溃断言追到 CMake 构建配置（漏传 Orin target flag
   致 sm_87 kernel 被编译排除），非平凡的跨层（运行时 kernel 表 ↔ 编译宏 ↔ CMake）根因排查。
-- 建立 INT4/INT8 在延迟/吞吐/显存/功耗/能效/上下文扩展性/量化掉点的完整边缘画像，沉淀为可复用部署工作流。
+- 建立 INT4/INT8 在延迟/吞吐/显存/功耗/能效/上下文扩展性/量化精度损失的完整边缘画像，沉淀为可复用部署工作流。
 
 > Resume (EN): *Quantized an 8B multimodal VLM (Cosmos-Reason2) to INT4/INT8 with NVIDIA
 > TensorRT-Edge-LLM and deployed it to Jetson Orin; measured the full latency/throughput/memory/

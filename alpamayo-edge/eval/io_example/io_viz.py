@@ -2,7 +2,7 @@
 """One figure that answers "what goes in and what comes out" with real data.
 
 Everything shown is verbatim from a real run of the deployed INT4 engine on orin-dog:
-frames are the actual JPEGs fed to the vision tower, the prompt is the actual text, and
+frames are the actual JPEGs fed to the vision encoder, the prompt is the actual text, and
 both outputs are the actual generations (freeform_out.json, and the n=210 benchmark dump).
 
 Run:  .venv/bin/python alpamayo-edge/eval/io_example/io_viz.py
@@ -42,7 +42,7 @@ for i, f in enumerate(FRAMES):
         sp.set_visible(True); sp.set_linewidth(0.6); sp.set_color("#888888")
     ax.set_title(f"frame {i+1}", fontsize=ANNOT, pad=2)
 fig.text(0.5, 0.995, "INPUT 1 of 2 — vision:  6 video frames, resized to <=448 px  "
-                     "->  vision tower  ->  112 image tokens per frame = 672 tokens",
+                     "->  vision encoder  ->  112 image tokens per frame = 672 tokens",
          ha="center", fontsize=BASE, color=INK)
 
 # ---- row 2: the actual text input ----

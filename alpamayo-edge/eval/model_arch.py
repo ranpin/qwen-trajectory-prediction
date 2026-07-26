@@ -3,7 +3,7 @@
 
 Why this figure exists: the results sections quote per-module shares (72.1% of
 decode time in the W4A16 GEMV, 25.6% of decode bytes in an unquantized lm_head,
-19-25% of TTFT in the vision tower) but the reader had no map of the model to
+19-25% of TTFT in the vision encoder) but the reader had no map of the model to
 attach them to. This draws the actual measured architecture on the left and, on
 the right, what we did to each module and what it measured.
 
@@ -14,7 +14,7 @@ already cross-validated elsewhere in this repo:
   * parameter split and INT4 decode bytes: same formula as eval/profile_viz.py,
     which agrees with the measured 4.847 GB engine file to +0.13%
   * kernel time shares: eval/profile/int4_decode_kern_sum.csv (Nsight Systems)
-  * vision tower: eval/vision/RESULTS.json
+  * vision encoder: eval/vision/RESULTS.json
 
 Run:  .venv/bin/python alpamayo-edge/eval/model_arch.py
 Out:  alpamayo-edge/docs/figures/model_arch.png
@@ -121,7 +121,7 @@ box(LX + 1.0, 92.0, 24.0, 6.4,
 box(LX + 27.5, 92.0, 24.0, 6.4,
     "输入 ②　文字问题\n（自然语言 prompt）", IO_F, IO_E)
 
-# ================= vision tower / embedding =================
+# ================= vision encoder / embedding =================
 down(LX + 13.0, 92.0, 85.4)
 down(LX + 39.5, 92.0, 85.4)
 box(LX + 1.0, 78.0, 24.0, 7.4,

@@ -36,7 +36,7 @@ description: 把 HuggingFace LLM/VLM 用 NVIDIA TensorRT-Edge-LLM 量化(INT4 AW
 | modelopt 导出假设单设备、模型却跨 cuda:0/1（illegal memory access） | 导出前摘 accelerate hook、把分片模型收拢到 CPU（PATCH C） |
 | `/kaggle/working` 固定 20GB 装不下 checkpoint+onnx（No space left） | 重活挪 `/tmp`（大盘），只把最终 tgz 写回 working；pack 放 try/finally 防晚期失败丢产物 |
 
-量化配置：`mtq.INT4_AWQ_CFG`（W4A16，~0.5 byte/param）/ `mtq.INT8_SMOOTHQUANT_CFG`（W8A8）。产物 = `llm/`(量化主干) + `visual/`(fp16 视觉塔，工具当前视觉塔仅 fp8/fp16) + `embedding.safetensors`(fp16)。
+量化配置：`mtq.INT4_AWQ_CFG`（W4A16，~0.5 byte/param）/ `mtq.INT8_SMOOTHQUANT_CFG`（W8A8）。产物 = `llm/`(量化主干) + `visual/`(fp16 视觉编码器，工具当前视觉编码器仅 fp8/fp16) + `embedding.safetensors`(fp16)。
 
 ## 阶段 2 — 下载 + 完整性校验
 
@@ -68,7 +68,7 @@ cd /home/vision/TensorRT-Edge-LLM
 ./build_orin/examples/llm/llm_build        --onnxDir <onnx>/llm    --engineDir <engines>/llm
 ./build_orin/examples/multimodal/visual_build --onnxDir <onnx>/visual --engineDir <engines>   # 输出到 <engines>/visual/
 ```
-引擎 ~90s。两种量化可共享同一份 fp16 视觉塔引擎（视觉塔不随量化变）。
+引擎 ~90s。两种量化可共享同一份 fp16 视觉编码器引擎（视觉编码器不随量化变）。
 
 ## 阶段 5 — 运行推理 + 基准
 
@@ -77,7 +77,7 @@ cd /home/vision/TensorRT-Edge-LLM
 功能（真实生成）：
 ```bash
 ./build_orin/examples/llm/llm_inference --engineDir <engines>/llm \
-  --multimodalEngineDir <engines>/visual \      # VLM 引擎即使纯文本也强制要视觉塔
+  --multimodalEngineDir <engines>/visual \      # VLM 引擎即使纯文本也强制要视觉编码器
   --inputFile input.json --dumpOutput --maxGenerateLength 128
 ```
 输入 JSON 格式：`{"batch_size":1,"temperature":0.7,"top_p":0.9,"top_k":50,"max_generate_length":128,"requests":[{"messages":[{"role":"user","content":"..."}]}]}`
@@ -116,8 +116,8 @@ cd /home/vision/TensorRT-Edge-LLM
 |---|---|---|---|
 | 骨干 `--quantization` | fp8 / int4_awq / nvfp4 / mxfp8 / int8_sq | 仅 **int4_awq / int8_sq** | fp8 需 sm_89+，nvfp4/mxfp8 更新 |
 | **lm_head** `--lm_head_quantization` | fp8 / int4_awq / nvfp4 / mxfp8 | **int4_awq ✅** | **默认不量化！**见下 |
-| 视觉塔 `--visual_quantization` | **仅 fp8** | ❌ | 死路：sm_87 无 fp8 |
-| KV cache `--kv_cache_quantization` | **仅 fp8** | ❌ | 死路：同上 |
+| 视觉编码器 `--visual_quantization` | **仅 fp8** | ❌ | 不可行：sm_87 无 fp8 |
+| KV cache `--kv_cache_quantization` | **仅 fp8** | ❌ | 不可行：同上 |
 | W4A8 | **不存在** | ❌ | 全仓库无实现，需换框架 |
 
 **⚠️ 最容易被漏的钱：AWQ 默认跳过 lm_head**，它以 fp16 留在引擎里。8B(vocab 151936, hidden 4096) 上
@@ -133,7 +133,7 @@ cd /home/vision/TensorRT-Edge-LLM
 - **先测可达带宽再决定要不要手写 kernel**：Orin 实测流式读 152.3 GB/s（理论 204.8 的 74%），
   TRT 的 W4A16 GEMV 已达可达值 **97%** ⇒ 手写 kernel 端到端只值 ~2%，别做。
   另：Jetson 按负载调 GPU/EMC 频率且 `jetson_clocks` 需 root ⇒ 微基准要**持续预热数百次**再取最优，
-  否则天花板会被低估 ~30%。
+  否则上限会被低估 ~30%。
 - **TRT 已自动融合 RMSNorm/RoPE/SwiGLU**（kernel 名形如 `__myl_AddCasMulMeaAddSqrDiv...`）且 CUDA graph 已启用
   ⇒「算子融合 / 降 launch 开销」几无空间（合计仅 ~3%）。
 

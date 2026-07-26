@@ -54,7 +54,7 @@ arrow(8.7, 8.05, "下载")
 box(7.55, "云端 Kaggle T4×2  —  NVIDIA ModelOpt 训练后量化(PTQ)\nAWQ (W4A16)  /  SmoothQuant (W8A8)   ·   校准集: cnn_dailymail 512 篇",
     CLOUD, CLOUD_E, w=9.0, h=1.15, fs=BASE)
 arrow(6.97, 6.3, "导出 ONNX")
-box(5.85, "边缘 ONNX 产物   (LLM + fp16 视觉塔)", ART, "#d97706", w=6.6, h=0.85)
+box(5.85, "边缘 ONNX 产物   (LLM + fp16 视觉编码器)", ART, "#d97706", w=6.6, h=0.85)
 arrow(5.42, 4.75, "scp  (Orin 无外网：云 → 本地 → Orin)")
 box(4.3, "Jetson AGX Orin (sm_87)  —  TensorRT-Edge-LLM v0.9.0  ·  llm_build",
     EDGE, EDGE_E, w=9.0, h=0.95, fs=BASE)

@@ -26,9 +26,9 @@
 | **M1** 数据+口径 | 申请 PhysicalAI-AV;下 200–500 段→eval JSONL(obs/gt,6.4s/64pt/10Hz);CVM 基线 | 本地 | 子集+CVM 数值 | ◻ 待数据审批（合成占位已通） |
 | **M2a** 量化(Cosmos-Reason2-8B) | 云上 INT8/INT4 → export ONNX → scp → Orin build → **推理跑通** | 云→Orin | ≥2 精度引擎 | ✅ 完成（INT4+INT8，Orin 真实出 token） |
 | **M2b** Alpamayo FP16 | 云上 export(onnx/llm+visual+action)→ scp → Orin build | 云→Orin | Orin 上出 1 条轨迹(验证 Orin 可跑) | ◻ 未启动 |
-| **M3** 评测 | Cosmos 量化掉点曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin+云 | 两张结果表 | ✅ 完成（**真实基准 MC 任务正确率**：Cosmos-Reason1-Benchmark robovqa FP16 88.2%/INT8·INT4 87.3%，掉点 −0.9pts；+ perplexity 辅助，见 `eval/accuracy/`；仅 AV 轨迹表压在 VLA 轨道） |
-| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ✅ 大部（INT4/INT8 **TTFT/TPOT/TPS/E2E+功耗/能效+sweep+多模态+掉点**齐；**FP16 引擎 Orin build 期 OOM(exit137)→无法部署**，本身即"量化必需"的发现，故无 FP16 设备端点） |
-| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ✅ 完成（[M5_report.md](M5_report.md) 一页总结 + 5 张图表（含掉点）+ 简历 bullet；仅缺 AV 轨道数据） |
+| **M3** 评测 | Cosmos 量化精度损失曲线;Alpamayo 轨迹 ADE/FDE/MR vs CVM(经 action_to_traj 积分) | 本地+Orin+云 | 两张结果表 | ✅ 完成（**真实基准 MC 任务正确率**：Cosmos-Reason1-Benchmark robovqa FP16 88.2%/INT8·INT4 87.3%，精度损失 −0.9pts；+ perplexity 辅助，见 `eval/accuracy/`；仅 AV 轨迹表压在 VLA 轨道） |
+| **M4** 基准 | Orin 延迟/吞吐/功耗(tegrastats):Cosmos FP16/INT8/INT4;Alpamayo FP16 | Orin | 基准表 | ✅ 大部（INT4/INT8 **TTFT/TPOT/TPS/E2E+功耗/能效+sweep+多模态+精度损失**齐；**FP16 引擎 Orin build 期 OOM(exit137)→无法部署**，本身即"量化必需"的发现，故无 FP16 设备端点） |
+| **M5** 报告 | 架构/方法/权衡/局限 + 图 + 简历 bullet | 本地 | 可展示 repo | ✅ 完成（[M5_report.md](M5_report.md) 一页总结 + 5 张图表（含精度损失）+ 简历 bullet；仅缺 AV 轨道数据） |
 
 **关键路径/风险点**:M2b(Alpamayo 能否在 Orin FP16 跑通)是最大不确定;跑不通则 VLA 轨道降级为"导出成功+Orin 运行受阻"如实记录,量化轨道(Cosmos)已**独立跑通并出指标**,项目已完整成立。
 
@@ -40,7 +40,7 @@
 |---|---|---|
 | 量化 + 边缘部署（工程主线） | ✅ **超额** | INT4/INT8 双量化 Orin 端到端跑通，额外啃下 FMHA 崩溃根因 |
 | 延迟/吞吐/显存/功耗/能效基准 | ✅ **超额** | 原只要基准表，实际含能效 tok/J、上下文 sweep、多模态 |
-| 精度-延迟-功耗**权衡** | ✅ **三轴齐** | 延迟/功耗/显存 + **精度轴已补**（FP16 参考下量化掉点 PPL INT4 +9.8%/INT8 +18.1%，2026-07-22 补齐）；口径为总部署差距的相对退化，非纯量化误差 |
+| 精度-延迟-功耗**权衡** | ✅ **三轴齐** | 延迟/功耗/显存 + **精度轴已补**（FP16 参考下量化精度损失 PPL INT4 +9.8%/INT8 +18.1%，2026-07-22 补齐）；口径为总部署差距的相对退化，非纯量化误差 |
 | 量化载体 | ⚠️ **改标的** | 原想量化 Alpamayo，但它**只支持 FP16 不能量化**（[FINDINGS.md](FINDINGS.md) F1，硬约束）→ 量化落在受支持的 Cosmos-Reason2-8B |
 | **AV 轨迹预测（领域本职）** | ❌ **未达成** | 用模型出 6.4s/64 路点、算 ADE/FDE/MR vs CVM——完全没做，整体压在暂缓的 VLA 轨道(M2b)里 |
 | CVM 强基线 | ◧ 仅基线侧 | CVM 在合成数据跑通，但无真实模型轨迹与之对比；真实数据(PhysicalAI-AV)待审批 |
@@ -74,7 +74,7 @@ ADE/FDE/MR+CI · CVM 基线 · 评估驱动 · BEV 可视化 —— 见 `eval/`�
 
 ## 简历表达（填实测数）
 用 **NVIDIA TensorRT-Edge-LLM** 在 **Jetson Orin** 端侧部署自动驾驶多模态栈:对 **Cosmos-Reason2-8B**
-做 **INT4/INT8** 量化(显存 **−42%** / INT4 decode **30.9 tok/s @ ~40W** / 掉点 PPL **+9.8%(INT4)、+18.1%(INT8)** vs FP16),
+做 **INT4/INT8** 量化(显存 **−42%** / INT4 decode **30.9 tok/s @ ~40W** / 精度损失 PPL **+9.8%(INT4)、+18.1%(INT8)** vs FP16),
 给出 decode-选-INT4、prefill-选-INT8 的选型依据。(VLA 轨道:部署 10B Alpamayo-R1 含 flow-matching 轨迹头
 + CVM 强基线 ADE/FDE 评测——暂缓。)
 技能:模型量化(INT4/INT8/AWQ/SmoothQuant/ModelOpt)、边缘部署(Jetson Orin/TensorRT-Edge-LLM)、多模态 VLM、量化精度评测。
@@ -88,9 +88,9 @@ ADE/FDE/MR+CI · CVM 基线 · 评估驱动 · BEV 可视化 —— 见 `eval/`�
 | K2 | 手写 W4A16 GEMV 对照 | ✅ 完成 —— 实测可达带宽 152.3 GB/s，TRT 已达其 97.1% ⇒ **推翻**"手写 kernel 有 10% 余量"的预测 |
 | — | 视觉编码器剖析 | ✅ 完成 —— 4.5+23.2ms/帧，占 TTFT 19–25%；发现 8 帧撞 maxInputLen=1024 |
 | K3' | **lm_head INT4 量化** | 🔄 **进行中** —— Kaggle kernel `alpamayo-edge-lmhead` 已跑；预测 TPOT 33.1→26.8ms(+23%)，需重测 n=210 正确率 |
-| — | 视觉编码器 INT8 | ❌ **死路**（实测确认）：工具仅暴露 fp8，sm_87 不支持 fp8 |
-| — | KV cache 量化 | ❌ **死路**：同上，仅 fp8 |
-| K5 | W4A8（prefill 提速） | ❌ **死路**：TRTEdge 全仓库无 W4A8 实现；需换框架，列为未来工作 |
+| — | 视觉编码器 INT8 | ❌ **不可行**（实测确认）：工具仅暴露 fp8，sm_87 不支持 fp8 |
+| — | KV cache 量化 | ❌ **不可行**：同上，仅 fp8 |
+| K5 | W4A8（prefill 提速） | ❌ **不可行**：TRTEdge 全仓库无 W4A8 实现；需换框架，列为未来工作 |
 | K4 | CR2-2B vs 8B Pareto | ⛔ **阻塞（需用户操作）**：`nvidia/Cosmos-Reason2-2B` 用有效 token 返回 **HTTP 403** —— 8B 的许可已接受、2B 未接受。需在 HF 上接受 2B 许可后即可继续 |
 
 详见 `docs/METHODOLOGY.md` §3.5「sm_87 上的量化选项空间」。
