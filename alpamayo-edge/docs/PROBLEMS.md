@@ -133,3 +133,26 @@
      当前保持 main 以便拿上游修复，代价就是这类漂移，已在此明确记录。
   4. 失败 run 的 `/kaggle/working` 残留（含整个 TRTEdge 源码树）可通过 `kaggle kernels output` 拉回，
      **正好用来直接读当前上游源码定位漂移**——比盲猜快得多。日志要用 `kaggle kernels logs`（`kernels output` 不含日志）。
+
+
+### G2. 量化 lm_head 时 T4 CUDA OOM（2026-07-26）
+
+- **现象**：`alpamayo-edge-lmhead` v2 跑到 845 s 失败：
+  `tensorrt-edgellm-quantize ... --lm_head_quantization int4_awq` 退出码 1，
+  栈底是 `modelopt/torch/quantization/tensor_quant.py:_quantize_impl` →
+  `torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.16 GiB.
+  GPU 1 has a total capacity of 14.56 GiB of which 1006.81 MiB is free`。
+- **根因**：`device_map="auto"` 把 8B(fp16≈16GB) 尽量塞满两张 T4（每张 14.56 GiB，实际用到 13.58 GiB），
+  **不给量化算子留临时空间**。而 lm_head 是 `4096 × 151936 = 622 M` 参数，
+  fake-quantize 需要约 **1.16 GiB** 的临时张量（与报错数值吻合）——**恰恰是骨干各层都不需要的那种大块临时内存**，
+  所以骨干 36 层全部量化成功、只在最后的 lm_head 上炸。
+- **解决**：给 PATCH A 的 `from_pretrained` 加
+  `max_memory={0: "11GiB", 1: "11GiB", "cpu": "60GiB"}`，
+  每张卡留出 ~3.5 GiB 余量给量化临时张量；11+11=22 GiB 仍足以把 16 GB 模型全放在 GPU 上（不牺牲速度）。
+- **教训**：
+  1. **"模型能装下"≠"能量化"**——量化过程本身需要额外的峰值内存，且**与被量化张量的最大单层尺寸成正比**。
+     这与之前 FP16 引擎的 TRT build 内存墙（权重×~3）是同一类错误的不同版本：
+     **算显存只算权重，必然低估**。
+  2. 词表投影层（vocab × hidden）通常是整个模型**单层最大**的权重，任何"逐层处理"的流程
+     （量化 / 导出 / 建引擎）都最可能在它上面爆——优化它收益也最大（见 K1），风险也最集中。
+  3. `device_map="auto"` 的默认目标是"尽量塞满"，凡是后续还要做重活的流程都应显式给 `max_memory` 留头寸。

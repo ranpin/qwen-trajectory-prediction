@@ -70,12 +70,17 @@ _A_old = (
     '                    trust_remote_code=True,\n'
     '                ).to(device)'
 )
+# NOTE (2026-07-26, run v2 failure): plain device_map="auto" fills both T4s to ~13.6/14.56 GiB,
+# and quantizing the lm_head needs a ~1.16 GiB temp for its 4096x151936 weight -> CUDA OOM
+# inside modelopt's fake_quantize. Cap per-GPU placement so ~3.5 GiB stays free for the
+# quantizer's temporaries. 11+11 GiB still holds the whole 16 GB fp16 model on-GPU.
 _A_new = (
     '                model = factory.from_pretrained(\n'
     '                    model_dir,\n'
     '                    torch_dtype=torch_dtype,\n'
     '                    trust_remote_code=True,\n'
     '                    device_map="auto",\n'
+    '                    max_memory={0: "11GiB", 1: "11GiB", "cpu": "60GiB"},\n'
     '                )'
 )
 _B_old = '    model.to(torch_dtype)'
