@@ -106,3 +106,48 @@ cd /home/vision/TensorRT-Edge-LLM
 - 一次性预判所有可能失败点（完整性、size、内存、路径），别逐个错误反应式处理。
 - 推代码前扫明文凭据（`hf_...`/AKIA/BEGIN/password），token 只走环境变量。
 - 详细结果与指标见 `alpamayo-edge/docs/edge_deploy_status.md`。
+
+
+## sm_87（Jetson Orin）上的量化选项空间 —— 先看这张表，别浪费 run
+
+`tensorrt-edgellm-quantize` 暴露的精度 × Orin 能力（2026-07-26 实测枚举）：
+
+| 部件 | 工具选项 | sm_87 可用 | 说明 |
+|---|---|---|---|
+| 骨干 `--quantization` | fp8 / int4_awq / nvfp4 / mxfp8 / int8_sq | 仅 **int4_awq / int8_sq** | fp8 需 sm_89+，nvfp4/mxfp8 更新 |
+| **lm_head** `--lm_head_quantization` | fp8 / int4_awq / nvfp4 / mxfp8 | **int4_awq ✅** | **默认不量化！**见下 |
+| 视觉塔 `--visual_quantization` | **仅 fp8** | ❌ | 死路：sm_87 无 fp8 |
+| KV cache `--kv_cache_quantization` | **仅 fp8** | ❌ | 死路：同上 |
+| W4A8 | **不存在** | ❌ | 全仓库无实现，需换框架 |
+
+**⚠️ 最容易被漏的钱：AWQ 默认跳过 lm_head**，它以 fp16 留在引擎里。8B(vocab 151936, hidden 4096) 上
+= **1.245 GB = decode 字节的 25.6%**；模型越小占比越高（2B 上达 **46%**）。decode 是访存墙 ⇒
+加 `--lm_head_quantization int4_awq` 预计按字节等比提速（8B 预测 +23%）。**但输出层对量化最敏感，
+必须重测正确率，不能只测延迟。**
+
+## 剖析与优化的正确姿势（踩过的坑）
+
+- **nsys 必须加 `--cuda-graph-trace=node`**：TRTEdge 的 decode 走已捕获的 CUDA graph，默认会把计时迭代
+  折叠成一个区间，只有慢速 warmup 被逐 kernel 归因 → 份额与带宽全错。自证方法：各 kernel 耗时之和应 ≈ 实测 TPOT。
+- **`ncu` 需 root**；无 sudo 时用「解析字节 ÷ 实测 kernel 耗时」，并用引擎文件大小自校验字节数。
+- **先测可达带宽再决定要不要手写 kernel**：Orin 实测流式读 152.3 GB/s（理论 204.8 的 74%），
+  TRT 的 W4A16 GEMV 已达可达值 **97%** ⇒ 手写 kernel 端到端只值 ~2%，别做。
+  另：Jetson 按负载调 GPU/EMC 频率且 `jetson_clocks` 需 root ⇒ 微基准要**持续预热数百次**再取最优，
+  否则天花板会被低估 ~30%。
+- **TRT 已自动融合 RMSNorm/RoPE/SwiGLU**（kernel 名形如 `__myl_AddCasMulMeaAddSqrDiv...`）且 CUDA graph 已启用
+  ⇒「算子融合 / 降 launch 开销」几无空间（合计仅 ~3%）。
+
+## 非交互式 ssh 的两个必踩坑
+
+- **`EDGELLM_PLUGIN_PATH` 必须显式 export**：`~/.bashrc` 对非交互式 shell 会提前 `return`；
+  插件没加载的表现是**引擎"反序列化失败"**（报错与真因相隔很远）。`llm_bench` 有时能跑纯属 cwd
+  恰好命中相对路径 `build/`。
+- **`nvcc` 不在非交互式 PATH**：`export PATH=/usr/local/cuda/bin:$PATH`。
+
+## 给上游打字符串补丁：配唯一性断言
+
+TRTEdge 用 `clone --depth 1`（未 pin commit）时上游会漂移。每处 needle 配 `assert count == 1`，
+needle 取**最小稳定片段**（别要求多行相邻——上游插一行注释就断，已真实发生：PATCH C 因
+`os.makedirs(output_dir)` 与 `with torch.inference_mode()` 之间被插注释而失配）。
+失败 run 的 `/kaggle/working` 残留可用 `kaggle kernels output` 拉回**直接读当前上游源码**定位漂移；
+日志要用 `kaggle kernels logs`（`kernels output` 不含日志）。
