@@ -188,13 +188,17 @@ footer a{color:var(--accent)}
 
   <h3>1.3 精度（辅助）：细粒度 perplexity 探针</h3>
   <p style="font-size:13.5px;color:var(--muted)">补充一个更细粒度的相对指标：12 条驾驶/推理 prompt 上，用 FP16 模型对量化输出做 teacher-forced perplexity（比 MC 正确率更敏感，能区分 INT4/INT8）。</p>
-  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><b>图 11 · 相对 FP16 的 perplexity 增幅与一致前缀</b><br><b>横轴</b>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)<br><b>竖轴</b>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数<br><b>结果</b>：INT4(AWQ) 精度损失 +9.8% 显著小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久<br><b>分析</b>：INT4(W4A16 纯权重、激活保 16bit)对校准质量更鲁棒；INT8(W8A8)连激活也量化更敏感 → 精度损失更大（校准集消融见"思考讨论"：域内小集反而更差，覆盖度比域匹配更关键）</figcaption></figure>
+  <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><b>图 11 · 相对 FP16 的 perplexity 增幅与一致前缀</b><br><b>横轴</b>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)<br><b>竖轴</b>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数<br><b>结果</b>：INT4(AWQ) +9.8% 小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久。<b>2026-07-27 复核</b>：此前两侧生成预算不一致（FP16 侧 160 / Orin 侧 200，且 INT4 有 8/12 条被截断），按<b>两侧同为 512</b> 重跑后为 <b>INT4 +9.1% / INT8 +15.6%</b>（一致前缀 12.7% / 4.2%）——<b>结论方向不变，但截断确实把差距略微夸大了</b>（INT8/INT4 之比 1.85× → 1.71×）<br><b>分析</b>：INT4(W4A16 纯权重、激活保 16bit)对校准质量更鲁棒；INT8(W8A8)连激活也量化更敏感 → 精度损失更大（校准集消融见"思考讨论"：域内小集反而更差，覆盖度比域匹配更关键）</figcaption></figure>
   <table>
     <caption><strong>表 5</strong>　各精度 perplexity 与相对 FP16 的一致前缀（12 条 prompt，teacher-forced，相对口径）。</caption>
     <tr><th>指标</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
     <tr><td>平均 perplexity（越低越好）</td><td>1.237</td><td class="win">1.359</td><td>1.460</td></tr>
     <tr><td>PPL 相对 FP16 增幅</td><td>—</td><td class="win">+9.8%</td><td>+18.1%</td></tr>
     <tr><td>与 FP16 贪心一致前缀占比</td><td>100%</td><td class="win">16.4%</td><td>5.7%</td></tr>
+      <tr><td colspan="4" style="background:#f8fafc;font-size:12.5px;color:#475569">↓ 2026-07-27 配平生成预算后重测（两侧同为 512，产物 <code>eval/accuracy/fp16_reference_cap512.json</code>）</td></tr>
+      <tr><td>平均 perplexity（配平后）</td><td>1.265</td><td class="win">1.380</td><td>1.462</td></tr>
+      <tr><td><strong>PPL 相对增幅（配平后）</strong></td><td>—</td><td class="win"><strong>+9.1%</strong></td><td><strong>+15.6%</strong></td></tr>
+      <tr><td>一致前缀占比（配平后）</td><td>100%</td><td class="win">12.7%</td><td>4.2%</td></tr>
   </table>
 
   <h3>1.4 Roofline 分析：三个"反常点"的机理</h3>
@@ -381,7 +385,7 @@ footer a{color:var(--accent)}
   </ul>
   <h3>诚实的边界</h3>
   <ul>
-    <li><strong>辅助 perplexity 指标有截断 confound（2026-07-27 自查发现，已修一半）</strong>：12-prompt 探针的生成上限设得太小，<strong>INT4 有 8/12、INT8 有 6/12 条撞上限被截断</strong>；而且 FP16 参考侧用的是另一个上限（Kaggle 侧 max_new_tokens=160 vs Orin 侧 200）——<strong>被比较的两侧预算不一致</strong>。方向上不利于当前结论：INT4 被截得更多，却报出更小的 perplexity 增幅，故"INT4 退化小于 INT8"<strong>可能部分是截断造成的假象</strong>。已用 512 上限重跑 Orin 侧（INT4 截断由 8/12 降到 2/12、最长输出 964→2300 字符），FP16 参考侧需一次云端重跑才能配平，结果出来后会更新 §1.3。<strong>主指标 MC 正确率不受影响</strong>——210×3 条输出全部以 end-of-sequence 结束、全部可解析、无一条撞上限。</li>
+    <li><strong>辅助 perplexity 指标曾有截断 confound（自查发现，2026-07-27 已解决）</strong>：原先 <strong>INT4 有 8/12、INT8 有 6/12</strong> 条撞生成上限，且 FP16 参考侧用的是另一个上限（Kaggle 160 vs Orin 200）——<strong>被比较的两侧预算不一致</strong>，而 INT4 被截得更多却报出更小的 perplexity 增幅，所以"INT4 退化小于 INT8"有可能是假象。<strong>已两侧统一到 512 重跑</strong>（Orin 侧截断降到 2/12；FP16 侧输出中位长度 719→1248 字符）：结果 <strong>INT4 +9.1% / INT8 +15.6%</strong>，<strong>结论方向不变、原结论成立</strong>，但截断确实把差距夸大过（INT8/INT4 之比 1.85× → 1.71×）。两版数字都保留在表 5，不覆盖历史。主指标 MC 正确率自始不受影响（210×3 条全部 end-of-sequence、全部可解析）。</li>
     <li><strong>输入长度只剩 0.9% 余量（事后才发现）</strong>：引擎 <code>maxInputLen=1024</code> 是构建时钉死的；n=210 里最长的一题实测 <strong>1015 token</strong>（40 段 5:4 视频是 154 token/帧，6 帧就 924），<strong>只剩 9 个 token</strong>。日志无截断告警、210 条全部返回，故已发布正确率不受影响，但当初没算这笔账；要加帧数或加长题干必须以更大 <code>maxInputLen</code> 重建引擎（见图 2）。</li>
     <li><strong>基准范围</strong>：用 <strong>Cosmos-Reason1-Benchmark 的 robovqa+robofail（n=210，具身机器人推理，非驾驶）</strong>——这是 repo 内<strong>自带视频</strong>的全部；其余 3 子集(agibot/bridgev2/holoassist，共 300)仅有标注、视频需从外部源数据集下载匹配，官方 AV 子集未发布 → 全 510 需外部视频流水线(future work)。<strong>无 Cosmos-Reason2-Benchmark（不存在），故用同族的 R1-Benchmark 评测 R2 模型（标准做法）</strong>。视频按 6 帧@448 采样（非官方原生协议，绝对分不追求复现论文；三精度同帧→精度损失可比）。</li>
     <li><strong>FP16 只能在 64GB goat 跑</strong>：32GB dog 上 FP16 既 build OOM(55GB)、载入也 OOM(15GB 引擎+缓存到顶) → FP16 的 TTFT/TPOT 在 goat 测；INT4/INT8 两机 &lt;3% 已交叉复现，加速比取 goat 同机测量。</li>
