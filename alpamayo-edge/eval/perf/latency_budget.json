@@ -1,0 +1,195 @@
+{
+ "device": "orin-dog (AGX Orin 32GB, sm_87, MAXN), batch=1",
+ "inputs": {
+  "vision_ms_per_patch": 0.05178571428571428,
+  "vision_fixed_ms": 4.5,
+  "tpot_ms_200iter": {
+   "int4": 30.65,
+   "int8": 49.75
+  },
+  "prefill_measured": {
+   "int4": {
+    "128": 86.1934,
+    "512": 301.2366,
+    "1024": 595.8632,
+    "2048": 1212.1671,
+    "4096": 2554.6294
+   },
+   "int8": {
+    "128": 70.1519,
+    "512": 181.7772,
+    "1024": 360.8589,
+    "2048": 743.4052,
+    "4096": 1625.6321
+   }
+  }
+ },
+ "engine_caps": {
+  "maxInputLen": 4096,
+  "maxImageTokens": 4096,
+  "maxImageTokensPerImage": 2048
+ },
+ "scenarios": [
+  {
+   "scenario": "现状基准：1 相机 × 6 帧 @448×252",
+   "frames": 6,
+   "frame_px": "448x252",
+   "tok_per_frame": 112,
+   "image_tokens": 672,
+   "input_tokens": 759,
+   "output_tokens": 1,
+   "vision_ms": 143.7,
+   "fits_engine": true,
+   "int4": {
+    "prefill_ms": 443.4,
+    "total_ms": 617.7,
+    "hz": 1.62,
+    "prefill_extrapolated": false
+   },
+   "int8": {
+    "prefill_ms": 268.2,
+    "total_ms": 461.6,
+    "hz": 2.17,
+    "prefill_extrapolated": false
+   }
+  },
+  {
+   "scenario": "6 相机 × 1 帧 @448×256（同分辨率铺开）",
+   "frames": 6,
+   "frame_px": "448x256",
+   "tok_per_frame": 112,
+   "image_tokens": 672,
+   "input_tokens": 762,
+   "output_tokens": 1,
+   "vision_ms": 143.7,
+   "fits_engine": true,
+   "int4": {
+    "prefill_ms": 445.1,
+    "total_ms": 619.4,
+    "hz": 1.61,
+    "prefill_extrapolated": false
+   },
+   "int8": {
+    "prefill_ms": 269.2,
+    "total_ms": 462.7,
+    "hz": 2.16,
+    "prefill_extrapolated": false
+   }
+  },
+  {
+   "scenario": "6 相机 × 1 帧 @960×544（视觉引擎每图上限 0.52 MP）",
+   "frames": 6,
+   "frame_px": "960x544",
+   "tok_per_frame": 510,
+   "image_tokens": 3060,
+   "input_tokens": 3150,
+   "output_tokens": 1,
+   "vision_ms": 638.4,
+   "fits_engine": true,
+   "int4": {
+    "prefill_ms": 1934.5,
+    "total_ms": 2603.5,
+    "hz": 0.38,
+    "prefill_extrapolated": false
+   },
+   "int8": {
+    "prefill_ms": 1218.1,
+    "total_ms": 1906.2,
+    "hz": 0.52,
+    "prefill_extrapolated": false
+   }
+  },
+  {
+   "scenario": "1 相机 × 1 帧 @1080p（单帧原生）",
+   "frames": 1,
+   "frame_px": "1920x1080",
+   "tok_per_frame": 2040,
+   "image_tokens": 2040,
+   "input_tokens": 2130,
+   "output_tokens": 1,
+   "vision_ms": 427.1,
+   "fits_engine": true,
+   "int4": {
+    "prefill_ms": 1265.9,
+    "total_ms": 1723.6,
+    "hz": 0.58,
+    "prefill_extrapolated": false
+   },
+   "int8": {
+    "prefill_ms": 778.7,
+    "total_ms": 1255.6,
+    "hz": 0.8,
+    "prefill_extrapolated": false
+   }
+  },
+  {
+   "scenario": "6 相机 × 1 帧 @1080p（真实车载配置）",
+   "frames": 6,
+   "frame_px": "1920x1080",
+   "tok_per_frame": 2040,
+   "image_tokens": 12240,
+   "input_tokens": 12330,
+   "output_tokens": 1,
+   "vision_ms": 2539.9,
+   "fits_engine": false,
+   "int4": {
+    "prefill_ms": 9816.2,
+    "total_ms": 12386.8,
+    "hz": 0.08,
+    "prefill_extrapolated": true
+   },
+   "int8": {
+    "prefill_ms": 6246.5,
+    "total_ms": 8836.2,
+    "hz": 0.11,
+    "prefill_extrapolated": true
+   }
+  },
+  {
+   "scenario": "现状基准 + 场景描述输出（110 token）",
+   "frames": 6,
+   "frame_px": "448x252",
+   "tok_per_frame": 112,
+   "image_tokens": 672,
+   "input_tokens": 759,
+   "output_tokens": 110,
+   "vision_ms": 143.7,
+   "fits_engine": true,
+   "int4": {
+    "prefill_ms": 443.4,
+    "total_ms": 3958.6,
+    "hz": 0.25,
+    "prefill_extrapolated": false
+   },
+   "int8": {
+    "prefill_ms": 268.2,
+    "total_ms": 5884.4,
+    "hz": 0.17,
+    "prefill_extrapolated": false
+   }
+  }
+ ],
+ "validation_vs_measured": {
+  "scenario": "现状基准：1 相机 × 6 帧 @448×252",
+  "measured_ms_per_request": {
+   "int4": 703.0,
+   "int8": 493.0
+  },
+  "modelled_ms": {
+   "int4": 617.7,
+   "int8": 461.6
+  },
+  "model_underestimates_pct": {
+   "int4": 12.1,
+   "int8": 6.4
+  },
+  "reason": "模型只算 视觉 + prefill + n_out×TPOT，不含分词/词嵌入 gather/请求 IO/主机侧开销。⇒ 表中的 Hz 是**乐观上界**，真实吞吐比它低 6–12%。"
+ },
+ "gap_to_10hz": {
+  "cheapest_scenario_ms": 461.6,
+  "speedup_needed_for_10hz": 4.6,
+  "int8_over_int4_actual": 1.34,
+  "cosmos_2b_prefill_speedup_measured": 4.02,
+  "note": "即使换 2B（prefill 实测快 4.02x，但正确率掉 11.0 pts 且 McNemar p=0.005 显著），最快场景也只到约 3.9 Hz。10 Hz 在本硬件 + 本模型量级上不可达。"
+ }
+}

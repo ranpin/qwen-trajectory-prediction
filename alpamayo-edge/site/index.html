@@ -284,13 +284,47 @@ footer a{color:var(--accent)}
   <strong>一帧原生 1080p 的 TTFT ≈ 3.4 s，即约 0.3 Hz</strong>——真实分辨率下这台机器是<strong>秒级而非帧级</strong>。
   ② decode 改用 200 次迭代后 INT4 TPOT 为 <strong>30.78 ms</strong>，此前 10 次迭代报的 32.34/33.93 ms 偏高 4.8–9.3%（std 6.89 = 均值的 20%），属噪声。</p>
 
+
+  <h3>1.10 跟得上车吗？—— 真实分辨率下的延迟预算</h3>
+  <p>前面所有指标都是"多快"，这一节回答"<strong>够不够</strong>"。把 §1.1 的 prefill 曲线、§1.7 的视觉编码器线性律
+  （4.5 + 23.2 ms/帧 @ 448 patch/帧 ⇒ 0.0518 ms/patch）和 §1.9 的 TPOT 组合起来，按真实相机配置算可达帧率。
+  脚本 <code>eval/perf/latency_budget.py</code>，数据 <code>latency_budget.json</code>。</p>
+  <table>
+    <caption>表 9　按相机配置的端到端延迟与可达帧率（orin-dog，MAXN，batch 1，输出 1 token 除末行）。token 数 = (W/32)×(H/32)，patch 数 = 4×token。</caption>
+    <thead><tr><th>配置</th><th>image token</th><th>总输入</th><th>视觉</th><th>INT4 总延迟</th><th>Hz</th><th>INT8 总延迟</th><th>Hz</th><th>引擎装得下?</th></tr></thead>
+    <tbody>
+      <tr><td>现状基准：1 相机 × 6 帧 @448×252</td><td>672</td><td>759</td><td>144 ms</td><td>618 ms</td><td>1.62</td><td><strong>462 ms</strong></td><td><strong>2.17</strong></td><td>是</td></tr>
+      <tr><td>6 相机 × 1 帧 @448×256</td><td>672</td><td>762</td><td>144 ms</td><td>619 ms</td><td>1.61</td><td>463 ms</td><td>2.16</td><td>是</td></tr>
+      <tr><td>6 相机 × 1 帧 @960×544（视觉引擎每图上限 0.52 MP）</td><td>3060</td><td>3150</td><td>638 ms</td><td>2604 ms</td><td>0.38</td><td>1906 ms</td><td>0.52</td><td>是</td></tr>
+      <tr><td>1 相机 × 1 帧 @1080p（单帧原生）</td><td>2040</td><td>2130</td><td>427 ms</td><td>1724 ms</td><td>0.58</td><td>1256 ms</td><td>0.80</td><td>是</td></tr>
+      <tr><td><strong>6 相机 × 1 帧 @1080p（真实车载配置）</strong></td><td>12240</td><td>12330</td><td>2540 ms</td><td>12.4 s</td><td><strong>0.08</strong></td><td>8.8 s</td><td><strong>0.11</strong></td><td><strong>否</strong>（超 4096 上限 3 倍）</td></tr>
+      <tr><td>现状基准 + 场景描述输出（110 token）</td><td>672</td><td>759</td><td>144 ms</td><td><strong>3959 ms</strong></td><td>0.25</td><td>5884 ms</td><td>0.17</td><td>是</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:13px;color:var(--muted)"><strong>口径自证</strong>：基准场景模型算 INT4 618 / INT8 462 ms，端到端<strong>实测 703 / 493 ms</strong>
+  （§1.9，运行日志推理段 ÷ 110 请求）⇒ 模型低估 12.1% / 6.4%，因为它只算 视觉 + prefill + 输出×TPOT，
+  不含分词、词嵌入 gather、请求 IO 与主机侧开销。<strong>所以表中的 Hz 是乐观上界，真实值再低 6–12%。</strong><br>
+  <strong>末行是交叉点的独立验证</strong>：输出从 1 token 变成 110 token 后 INT4 反超 INT8（3959 vs 5884 ms）——
+  与 §1.9 的边界 110 &gt; 759/83 = 9.1 一致。同一套数据两处自洽。</p>
+  <div class="callout warn">
+    <div class="t">部署判断：这套系统不能进实时感知环路，但能做事件级场景理解</div>
+    <strong>差距是量级的，不是调优能补的。</strong>AV 感知/规划环路要 10–30 Hz（≤100 ms）；本系统在<strong>已经缩到 448 px</strong> 的最便宜配置下是
+    2.17 Hz（INT8），到真实 1080p 单帧是 0.80 Hz，6 相机原生 1080p 是 <strong>0.11 Hz 且引擎根本装不下</strong>（12330 token 超 4096 上限 3 倍）。<br>
+    <strong>而量化补不上这个差距</strong>：最便宜场景要到 10 Hz 还需 <strong>4.6×</strong>，量化只给了 1.34×（§1.9）；
+    换 2B 模型 prefill 实测快 4.02× 也只到约 3.9 Hz，还要付 11.0 pts 正确率（§1.8，p=0.005 显著）。
+    根因在 §1.4 已经证明：<strong>这类负载是 prefill 主导、计算受限，而权重量化对 prefill 无效</strong>。<br>
+    ⇒ <strong>正确的定位</strong>：事件触发的场景理解 / 风险解释 / 行车日志离线挖掘 / 面向驾驶员的问答——
+    这些场景的自然频率是 0.1–1 Hz，本系统<strong>够用</strong>。<strong>不适合</strong>闭环控制与帧率级感知。
+    这也解释了为什么本项目部署的是 AV 栈的<strong>感知推理层</strong>而非规划层（§2.1 表 1）。
+  </div>
+
   <h2>二、方法细节（可复现）</h2>
 
   <h3 id="io">2.1 输入是什么、输出是什么（先看这个）</h3>
   <p>这一节回答最基本的问题：<strong>这套系统喂进去什么、吐出来什么</strong>。下面这张图里的图像、问题、输出<strong>全部是真实运行的原文</strong>（INT4 引擎、orin-dog 实测，产物在 <code>eval/io_example/</code>）。</p>
   <figure><img src="figures/io_example.png" alt="real input and output example"><figcaption><b>图 18 · 真实输入 → 真实输出实例（逐字未改）</b><br><b>上排</b>：输入之一 = <strong>6 帧视频画面</strong>（我们把长边缩到 448 px → 实为 448×252，processor 再缩到 32 的整数倍 <strong>448×256</strong>），经<strong>视觉编码器 ViT</strong>（<code>qwen3_vl_vision</code>，27 层，fp16）编码为 <strong>每帧 112 个 image token，共 672 个</strong>（完整预处理链见图 2）<br><b>中排</b>：输入之二 = <strong>一段文字问题</strong>（本例 87 token）。两者拼成 <strong>759 token</strong> 的 prompt 送入 prefill<br><b>下排</b>：输出 = <strong>自回归生成的文字</strong>（本例生成到 110 token 上限被截断，故末句未完）<br><b>说明</b>：同一个引擎在基准评测模式下，问题结尾改成"Answer with ONLY the single letter"，输出就退化为<strong>单个字母</strong>（如 <code>A</code>）——这正是 n=210 正确率所打分的对象。所以"输出格式"完全由 prompt 决定，模型本身始终是<strong>文本生成</strong>。</figcaption></figure>
   <table>
-    <caption><strong>表 9</strong>　三个层次的输入 / 输出，别混淆：①运行时系统 ②一次性构建流水线 ③评测。前两者常被混为一谈，是"讲不清这个项目做了什么"的主要原因。</caption>
+    <caption><strong>表 10</strong>　三个层次的输入 / 输出，别混淆：①运行时系统 ②一次性构建流水线 ③评测。前两者常被混为一谈，是"讲不清这个项目做了什么"的主要原因。</caption>
     <tr><th>层次</th><th>输入</th><th>输出</th><th>频率 / 在哪跑</th></tr>
     <tr><td><strong>① 运行时系统</strong><br><span style="font-size:12px;color:var(--muted)">= 部署完成后每来一个请求</span></td><td><strong>N 帧图像</strong>（长边 448 px；processor 再缩到 32 的整数倍 ⇒ <strong>112 token/帧</strong>@448×256、<strong>154</strong>@448×352）<br>＋ <strong>文字问题</strong><br><span style="font-size:12px;color:var(--muted)">prompt 总长 ≤ maxInputLen 1024（见图 2）</span></td><td><strong>文字</strong>：场景描述 / 风险判断 / 行动建议<br><span style="font-size:12px;color:var(--muted)">格式由 prompt 决定（散文 或 单字母）</span></td><td>每请求一次<br><strong>Jetson Orin 上</strong></td></tr>
     <tr><td><strong>② 构建流水线</strong><br><span style="font-size:12px;color:var(--muted)">= 我们做的"算法/工程"部分</span></td><td><strong>HF fp16 预训练权重</strong>（Cosmos-Reason2-8B）<br>＋ <strong>校准集</strong>（cnn_dailymail 512 篇）</td><td><strong>2 个设备专用 TensorRT 引擎</strong><br>LLM（INT4 4.85 GB / INT8 8.30 GB）＋ 视觉编码器（fp16 1.17 GB）</td><td><strong>一次性</strong><br>量化在云 T4×2，建引擎在 Orin</td></tr>
@@ -342,7 +376,7 @@ footer a{color:var(--accent)}
   <h3>能用来干什么</h3>
   <ul>
     <li><strong>可复用的边缘量化部署方法论</strong>——同套流程可把任意 TRTEdge 支持的 LLM/VLM 部署到任意 Jetson，并给出量化选型依据。</li>
-    <li><strong>可实时查询的车载场景推理系统</strong>——喂驾驶图像 + 问题，~30 TPS @ ~40W 的边缘推理，可作感知理解 / 安全监控 / 可解释模块。</li>
+    <li><strong>事件级（非帧率级）的车载场景推理系统</strong>——喂驾驶图像 + 问题，~30 TPS 生成 @ ~40 W。<strong>可达请求频率已量化（§1.10）</strong>：缩到 448 px 时 2.17 Hz、真实 1080p 单帧 0.80 Hz、6 相机原生 1080p 仅 0.11 Hz 且引擎装不下 ⇒ 适合<strong>事件触发的场景理解 / 风险解释 / 日志挖掘 / 驾驶员问答</strong>（自然频率 0.1–1 Hz），<strong>不适合</strong>闭环控制与帧率级感知（需 10–30 Hz，差 4.6× 以上，且量化补不上）。</li>
     <li><strong>完整的 INT4-vs-INT8 边缘权衡实证</strong>——延迟 / 吞吐 / 显存 / 功耗 / 能效 / 上下文扩展性 / 精度损失全维度。</li>
   </ul>
   <h3>诚实的边界</h3>
