@@ -1,0 +1,48 @@
+{
+    "input_file": "/home/vision/vt_tall6.json",
+    "responses": [
+        {
+            "batch_idx": 0,
+            "finish_reason": "end-of-sequence",
+            "formatted_complete_request": "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|>Answer with ONLY the single letter.<|im_end|>\n<|im_start|>assistant\n",
+            "formatted_system_prompt": "",
+            "messages": [
+                {
+                    "content": [
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_100_0.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_100_1.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_100_2.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_100_3.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_100_4.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_100_5.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "text": "Answer with ONLY the single letter.",
+                            "type": "text"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "output_text": "A",
+            "request_idx": 0
+        }
+    ]
+}

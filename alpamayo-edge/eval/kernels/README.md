@@ -7,10 +7,11 @@ Nsight（见 `eval/profile/`）显示 TRT-Edge-LLM 的 `gemv_kernel` 占 INT4 de
 
 ## 复现
 ```bash
-scp w4a16_gemv.cu vision@<orin>:/home/vision/kbench.cu
-ssh vision@<orin> 'export PATH=/usr/local/cuda/bin:$PATH && \
-  nvcc -O3 -arch=sm_87 -o kbench kbench.cu && ./kbench > kbench_results.csv'
-scp vision@<orin>:/home/vision/kbench_results.csv ./results.csv
+A=/home/vision/chenrunbin/alpamayo-edge/kernels        # 见 docs/device_layout.md
+scp w4a16_gemv.cu vision@<orin>:$A/kbench.cu
+ssh vision@<orin> "export PATH=/usr/local/cuda/bin:\$PATH && cd $A && \
+  nvcc -O3 -arch=sm_87 -o kbench kbench.cu && ./kbench > kbench_results.csv"
+scp vision@<orin>:$A/kbench_results.csv ./results.csv
 .venv/bin/python eval/kernels/gemv_bench_viz.py     # -> docs/figures/gemv_kernel_bench.png
 ```
 注意：`nvcc` 不在非交互式 ssh 的 PATH 里，需显式 `export PATH=/usr/local/cuda/bin:$PATH`。

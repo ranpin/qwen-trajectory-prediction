@@ -1,0 +1,28 @@
+{
+    "input_file": "/home/vision/vt_1.json",
+    "responses": [
+        {
+            "batch_idx": 0,
+            "finish_reason": "end-of-sequence",
+            "formatted_complete_request": "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>You are shown 1 frames sampled in order from a video.\nThe agent in the video was given the instruction - put toy from the basket on the countertop. Was the agent successful in completing the task specified by the instruction?\nOptions:\nA. no\nB. yes\nAnswer with ONLY the single letter of the correct option.<|im_end|>\n<|im_start|>assistant\n",
+            "formatted_system_prompt": "",
+            "messages": [
+                {
+                    "content": [
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_0_0.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "text": "You are shown 1 frames sampled in order from a video.\nThe agent in the video was given the instruction - put toy from the basket on the countertop. Was the agent successful in completing the task specified by the instruction?\nOptions:\nA. no\nB. yes\nAnswer with ONLY the single letter of the correct option.",
+                            "type": "text"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "output_text": "A",
+            "request_idx": 0
+        }
+    ]
+}

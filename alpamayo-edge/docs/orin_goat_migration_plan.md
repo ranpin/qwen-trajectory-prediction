@@ -7,6 +7,8 @@
 
 ## 前置（需用户操作）
 - **设备**:orin-goat = `nvidia@30.245.40.73`，AGX Orin **64GB**，同架构 sm_87。工作目录 **`/home/nvidia/chenrunbin.crb`**（用户已建）。
+  ⚠️ **2026-07-27 起该目录已改名为 `/home/nvidia/chenrunbin/`，内部按类型分了子目录**（与其他设备统一）——
+  本文以下命令里的路径是当时的原样记录，现行布局见 [device_layout.md](device_layout.md)。
 - **访问（待授权）**:把本机 RSA 公钥（`id_rsa`，能上 orin-dog 的那把）加到 goat 的 `/home/nvidia/.ssh/authorized_keys`。加完我即可自主执行以下 Phase。
 - 本阶段只用**已有 ONNX 产物**（不重下模型/不重量化）→ 不涉及 HF 门控/凭据。
 

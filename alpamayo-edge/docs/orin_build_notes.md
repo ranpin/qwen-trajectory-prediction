@@ -4,7 +4,8 @@
 > 全部踩坑与解法、FMHA 崩溃根因深挖、复现命令。结果指标见 [edge_deploy_status.md](edge_deploy_status.md)；
 > 可复用的通用工作流见仓库 skill `edge-quantize-deploy`（`.claude/skills/`）。
 
-设备：Orin `vision@30.245.40.99`（SSH 用 IP，别名带中文后缀解析失败）。源码 `/home/vision/TensorRT-Edge-LLM`。
+设备：Orin `vision@30.245.40.99`（SSH 用 IP，别名带中文后缀解析失败）。源码 `/home/vision/TensorRT-Edge-LLM`（**共享安装**）。
+本项目的产物在 `/home/vision/chenrunbin/alpamayo-edge/`（2026-07-27 起，见 [device_layout.md](device_layout.md)）。
 JetPack 6 / L4T R36.4.4 / CUDA 12.6 / TRT 10.7 / **sm_87** / 29GB 统一内存。
 
 ## 正确的 Orin 构建配方 ⚠️
@@ -42,14 +43,15 @@ export EDGELLM_PLUGIN_PATH=$PWD/build_orin/libNvInfer_edgellm_plugin.so
 ./build_orin/examples/llm/llm_build            --onnxDir <onnx>/llm    --engineDir <engines>/llm
 ./build_orin/examples/multimodal/visual_build  --onnxDir <onnx>/visual --engineDir <engines>   # 输出到 <engines>/visual/
 
-# 性能：prefill / decode
-./build_orin/examples/llm/llm_bench --engineDir /home/vision/engines/int4/llm --mode prefill --inputLen 512 --iterations 5  --warmup 2
-./build_orin/examples/llm/llm_bench --engineDir /home/vision/engines/int4/llm --mode decode  --pastKVLen 512 --iterations 20 --warmup 3
+# 性能：prefill / decode        （A = 我在本机的项目根，见 device_layout.md）
+A=/home/vision/chenrunbin/alpamayo-edge
+./build_orin/examples/llm/llm_bench --engineDir $A/engines/int4/llm --mode prefill --inputLen 512 --iterations 5  --warmup 2
+./build_orin/examples/llm/llm_bench --engineDir $A/engines/int4/llm --mode decode  --pastKVLen 512 --iterations 20 --warmup 3
 
 # 功能：真实生成（VLM 引擎需带视觉编码器，即使纯文本；VLM 图像路径还额外强制 --outputFile）
-./build_orin/examples/llm/llm_inference --engineDir /home/vision/engines/int4/llm \
-  --multimodalEngineDir /home/vision/engines/int4/visual \
-  --inputFile /home/vision/cosmos_input.json --dumpOutput --maxGenerateLength 128
+./build_orin/examples/llm/llm_inference --engineDir $A/engines/int4/llm \
+  --multimodalEngineDir $A/engines/int4/visual \
+  --inputFile $A/io/cosmos_input.json --dumpOutput --maxGenerateLength 128
 ```
 
 功耗测量：另开 shell `tegrastats --interval 250 > power.log &`，跑 bench，解析 GPU-active 采样的

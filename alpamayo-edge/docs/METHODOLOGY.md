@@ -227,6 +227,17 @@ llm_bench --engineDir engines/int4/llm --mode decode  --pastKVLen 512 --iteratio
 - **更深结论**:**校准集的覆盖度/质量(数量、长度、多样性)远比"域匹配"重要**——512 篇长新闻是好的通用校准集,100 条短问题覆盖差→SmoothQuant 激活 scale 估计差→严重劣化。**故默认 news-512 是合理选择,得到验证**;INT8 对校准的敏感性确认,但解药是"好覆盖"而非"域内"。
 - **Caveat**:本消融"域"与"规模/长度"混杂(同时变),不能纯归因于域;要纯隔离需同规模/长度的域内 vs 通用集。
 
+## 4.3 产物放在哪（各设备目录布局）
+
+跨 **1 台 Mac + 2 台 Jetson Orin + Kaggle 云**，合计约 230 GB 产物的落位、
+"什么可重建 / 什么是单点 / 哪台磁盘快满" 见 **[device_layout.md](device_layout.md)**。要点：
+- 两台 Orin 都是**共享账号**，我的文件统一在 **`<home>/chenrunbin/alpamayo-edge/`**，
+  按 `engines/ onnx/ tarballs/ bench/ io/ logs/ prof/ kernels/ scripts/` 分类，机上各有 `INDEX.md`。
+- **唯一的单点是 FP16 引擎**（16 GB，只在 orin-goat）——但其 ONNX 已本地归档并校验过 SHA256，
+  可在任意 ≥64 GB 内存的 sm_87 机器上重建。
+- 已入 git 的运行记录里写死了旧绝对路径（如 `/home/vision/bench/frames/*.jpg`）；这些是实测记录**不改写**，
+  改为在设备上保留软链，保证老记录仍可原样重跑。
+
 ## 5. 一键复现指引
 
 - 量化+导出(云,一次性):`cloud/kaggle_cosmos_only.py`(INT4/INT8)、`cloud/kaggle_fp16_ref.py`(FP16 精度参考)。默认校准集即 cnn_dailymail/512;要换域改 `--dataset`/`--num_samples`。
