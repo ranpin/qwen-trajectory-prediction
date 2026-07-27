@@ -1,98 +1,154 @@
 {
-  "written": "2026-07-27, BEFORE measuring the len4096 engines",
-  "resolved": "2026-07-27, after measuring. Outcomes recorded in place -- predictions are not edited away.",
-  "why": "The site currently recommends 'decode 看 INT4' as the headline. That is only right for generation-heavy workloads. For a VLM understanding task (long multimodal input, very short answer) prefill dominates, and weight-only INT4 gives nothing on prefill (INT4 prefill ~= FP16, see roofline 1.4) while INT8 gets 1.87x from native int8 cores. So there must be a crossover.",
-
-  "model": {
-    "e2e_ms": "TTFT(n_in) + n_out * TPOT",
-    "assumption": "TTFT approximately linear in n_in over 128..1024; attention O(n^2) adds ~4% at 1024 and ~14% at 4096 so linearity understates TTFT at 4096"
+ "written": "2026-07-27, BEFORE measuring the len4096 engines",
+ "resolved": "2026-07-27, after measuring. Outcomes recorded in place -- predictions are not edited away.",
+ "why": "The site currently recommends 'decode 看 INT4' as the headline. That is only right for generation-heavy workloads. For a VLM understanding task (long multimodal input, very short answer) prefill dominates, and weight-only INT4 gives nothing on prefill (INT4 prefill ~= FP16, see roofline 1.4) while INT8 gets 1.87x from native int8 cores. So there must be a crossover.",
+ "model": {
+  "e2e_ms": "TTFT(n_in) + n_out * TPOT",
+  "assumption": "TTFT approximately linear in n_in over 128..1024; attention O(n^2) adds ~4% at 1024 and ~14% at 4096 so linearity understates TTFT at 4096"
+ },
+ "measured_inputs_dog": {
+  "int4": {
+   "ttft_ms_at_512": 300.98,
+   "tpot_ms": 32.34
   },
-
-  "measured_inputs_dog": {
-    "int4": {"ttft_ms_at_512": 300.98, "tpot_ms": 32.34},
-    "int8": {"ttft_ms_at_512": 157.45, "tpot_ms": 50.65},
-    "source": "eval/perf/fp16_speedup_goat.json cross_device_repro (dog values)"
+  "int8": {
+   "ttft_ms_at_512": 157.45,
+   "tpot_ms": 50.65
   },
-
-  "derivation": {
-    "int8_prefill_saving_at_512_ms": 143.53,
-    "int8_decode_penalty_per_token_ms": 18.31,
-    "break_even_n_out_at_512_in": 7.84,
-    "rule": "INT8 wins when n_out < n_in / 65.3"
+  "source": "eval/perf/fp16_speedup_goat.json cross_device_repro (dog values)"
+ },
+ "derivation": {
+  "int8_prefill_saving_at_512_ms": 143.53,
+  "int8_decode_penalty_per_token_ms": 18.31,
+  "break_even_n_out_at_512_in": 7.84,
+  "rule": "INT8 wins when n_out < n_in / 65.3"
+ },
+ "outcomes": [
+  {
+   "case": "512 in / 128 out (published E2E)",
+   "predicted": "INT4 wins",
+   "measured": "INT4 4.61 s vs INT8 6.87 s on goat = 1.49x",
+   "verdict": "CONFIRMED"
   },
-
-  "outcomes": [
-    {
-      "case": "512 in / 128 out (published E2E)",
-      "predicted": "INT4 wins",
-      "measured": "INT4 4.61 s vs INT8 6.87 s on goat = 1.49x",
-      "verdict": "CONFIRMED"
-    },
-    {
-      "case": "759 in / 1 out (n=210 MC benchmark, 6 frames @448x252)",
-      "predicted_e2e_int4_ms": 627, "predicted_e2e_int8_ms": 430, "predicted_ratio": 1.46,
-      "measured": "run_int4.log / run_int8.log inference phase 77.4 s vs 54.2 s over 110 requests = 703 vs 493 ms/request = 1.43x",
-      "verdict": "CONFIRMED (2% off)"
-    },
-    {
-      "case": "TTFT at 4096 input, INT4",
-      "predicted_ms": 2650,
-      "measured_ms": 2554.6,
-      "error_pct": -3.6,
-      "verdict": "CONFIRMED -- the compute-bound model (62.0 TFLOP matmul + 9.9 TFLOP attention at 27.1 TFLOP/s effective) predicts long-input prefill to within 4%"
-    },
-    {
-      "case": "break-even boundary",
-      "predicted": "n_out = n_in / 65.3 (from the old engine pair at 512)",
-      "measured_matched_pair": "n_out = n_in / 83 (len4096 engines, stable 81.8/83.2/83.4/84.2 at 512/1024/2048/4096)",
-      "measured_best_tuned": "n_out = n_in / 66.5 (old int4 vs old int8 at 512, i.e. each precision at its best-tuned build)",
-      "verdict": "CONFIRMED in form, and the prediction matches the best-tuned pair almost exactly (65.3 vs 66.5). The matched-pair boundary sits at /83 only because the len4096 INT8 engine carries a ~15% prefill penalty (see opt_shape_finding), which works AGAINST INT8 -- so the 'INT8 wins on long-input/short-output' conclusion is conservative either way."
-    },
-    {
-      "case": "engine file size vs maxInputLen",
-      "predicted": "unchanged -- maxInputLen sizes activations/profile, not weights",
-      "measured": "INT4 5.7 G at both 1024 and 4096; INT8 8.9 G at both; visual 1.1 G despite maxImageTokens 1024->4096",
-      "verdict": "CONFIRMED"
-    }
-  ],
-
-  "opt_shape_finding": {
-    "what": "llmBuilder.cpp sets the TRT optimization profile to opt = maxInputLen/2, max = maxInputLen (variable names optCtxShape / maxCtxShape). Raising maxInputLen therefore moves the tuning point.",
-    "measured_prefill_ms": {
-      "128":  {"int4_opt512": 86.29, "int4_opt2048": 86.19, "int8_opt512": 71.21, "int8_opt2048": 70.15},
-      "512":  {"int4_opt512": 301.62, "int4_opt2048": 301.24, "int8_opt512": 157.66, "int8_opt2048": 181.78},
-      "1024": {"int4_opt512": 598.82, "int4_opt2048": 595.86, "int8_opt512": 312.42, "int8_opt2048": 360.86}
-    },
-    "result": "INT4 is unaffected (<=0.5% at every length). INT8 pays +15.3% at 512 and +15.5% at 1024, and nothing at 128.",
-    "caveat_resolved": "The len4096 engines changed THREE things at once, so two single-variable control builds were run to attribute the penalty.",
-    "controls_int8_prefill_ms": {
-      "int8_old      (len1024, batch4, KV4096)": {"512": 157.66, "1024": 312.42},
-      "int8_ctl_kv8k (len1024, batch4, KV8192)": {"512": 156.38, "1024": 306.64},
-      "int8_ctl_b1   (len1024, batch1, KV4096)": {"512": 167.12, "1024": 333.33},
-      "int8_len4096  (len4096, batch1, KV8192)": {"512": 181.78, "1024": 360.86}
-    },
-    "attribution": {
-      "maxKVCacheCapacity 4096->8192": "-0.8% / -1.8% => NO effect (within noise)",
-      "maxBatchSize 4->1": "+6.0% / +6.7% => real, and counter-intuitive: shrinking the profile's max batch makes batch-1 prefill SLOWER. TRT tunes tactics for opt=(maxBatchSize, maxInputLen/2); the batch-4 opt apparently selects kernels that also serve batch 1 better.",
-      "maxInputLen 1024->4096 (opt 512->2048)": "+8.8% / +8.3% => the opt-shape shift itself",
-      "total": "~+15%, and the two causes are independent and roughly additive"
-    },
-    "why_int8_only": "INT4 is W4A16 -- weights are dequantized and the GEMM runs in fp16, a path whose tactic choice is shape-insensitive here. INT8 is W8A8 on native int8 tensor cores, where the tactic/tile space is richer and more shape-sensitive. Mechanism is inferred, not proven.",
-    "practical_consequence": "On this 32 GB device INT8 cannot have both: maxInputLen 4096 with maxBatchSize 4 would very likely exceed the build-memory ceiling, and dropping to batch 1 costs 6%. So INT8's capacity upgrade costs ~15% prefill, of which 6% is forced. INT4 pays nothing at all. Even so INT8 is still 1.57x faster than INT4 at 4096 input (1625.6 vs 2554.6 ms) -- without the penalty it would be ~1.82x."
+  {
+   "case": "759 in / 1 out (n=210 MC benchmark, 6 frames @448x252)",
+   "predicted_e2e_int4_ms": 627,
+   "predicted_e2e_int8_ms": 430,
+   "predicted_ratio": 1.46,
+   "measured": "run_int4.log / run_int8.log inference phase 77.4 s vs 54.2 s over 110 requests = 703 vs 493 ms/request = 1.43x",
+   "verdict": "CONFIRMED (2% off)"
   },
-
-  "build_cost": {
-    "int4_len4096": {"peak_ram_mb": 18587, "wall": "2m33s", "engine": "5.7G"},
-    "int8_len4096": {"peak_ram_mb": 29694, "wall": "4m03s", "engine": "8.9G",
-      "note": "29.7 GB on a ~30 GB machine -- essentially at the ceiling.",
-      "claim_retracted": "I first wrote that maxBatchSize 4->1 was *required* because a batch-4 profile would be 4x larger and would have OOM'd. The control builds disprove that: int8_ctl_b1 (len1024, batch1) already peaked at 29105 MB and int8_ctl_kv8k (len1024, batch4, KV8192) at 27571 MB, so going from len1024 to len4096 added only ~0.6 GB. INT8 build peak is ~28-30 GB regardless of these knobs -- it is dominated by the builder's weight workspace, not by the activation profile. Batch 4 at len 4096 might well have fit. Untested."},
-    "visual_len4096": {"peak_ram_mb": 7163, "wall": "1m11s", "engine": "1.1G"}
+  {
+   "case": "TTFT at 4096 input, INT4",
+   "predicted_ms": 2650,
+   "measured_ms": 2554.6,
+   "error_pct": -3.6,
+   "verdict": "CONFIRMED -- the compute-bound model (62.0 TFLOP matmul + 9.9 TFLOP attention at 27.1 TFLOP/s effective) predicts long-input prefill to within 4%"
   },
-
-  "decode_200_iter": {
-    "why": "published TPOT rested on 10 iterations with std 6.89 ms (20% of the mean), so the +-13% CI was wider than the reported precision",
-    "int4_old": 30.78, "int8_old": 49.47,
-    "int4_len4096": 30.65, "int8_len4096": 49.75,
-    "note": "decode is unaffected by the opt shift (its profile is seq=1). Published INT4 TPOT was 32.34 (dog) / 33.93 (repro); the 200-iteration value is 30.78, i.e. 4.8-9.3% lower -- the old 10-iteration numbers were noise-inflated."
+  {
+   "case": "break-even boundary",
+   "predicted": "n_out = n_in / 65.3 (from the old engine pair at 512)",
+   "measured_matched_pair": "n_out = n_in / 83 (len4096 engines, stable 81.8/83.2/83.4/84.2 at 512/1024/2048/4096)",
+   "measured_best_tuned": "n_out = n_in / 66.5 (old int4 vs old int8 at 512, i.e. each precision at its best-tuned build)",
+   "verdict": "CONFIRMED in form, and the prediction matches the best-tuned pair almost exactly (65.3 vs 66.5). The matched-pair boundary sits at /83 only because the len4096 INT8 engine carries a ~15% prefill penalty (see opt_shape_finding), which works AGAINST INT8 -- so the 'INT8 wins on long-input/short-output' conclusion is conservative either way."
+  },
+  {
+   "case": "engine file size vs maxInputLen",
+   "predicted": "unchanged -- maxInputLen sizes activations/profile, not weights",
+   "measured": "INT4 5.7 G at both 1024 and 4096; INT8 8.9 G at both; visual 1.1 G despite maxImageTokens 1024->4096",
+   "verdict": "CONFIRMED"
   }
+ ],
+ "opt_shape_finding": {
+  "what": "llmBuilder.cpp sets the TRT optimization profile to opt = maxInputLen/2, max = maxInputLen (variable names optCtxShape / maxCtxShape). Raising maxInputLen therefore moves the tuning point.",
+  "measured_prefill_ms": {
+   "128": {
+    "int4_opt512": 86.29,
+    "int4_opt2048": 86.19,
+    "int8_opt512": 71.21,
+    "int8_opt2048": 70.15
+   },
+   "512": {
+    "int4_opt512": 301.62,
+    "int4_opt2048": 301.24,
+    "int8_opt512": 157.66,
+    "int8_opt2048": 181.78
+   },
+   "1024": {
+    "int4_opt512": 598.82,
+    "int4_opt2048": 595.86,
+    "int8_opt512": 312.42,
+    "int8_opt2048": 360.86
+   }
+  },
+  "result": "INT4 is unaffected (<=0.5% at every length). INT8 pays +15.3% at 512 and +15.5% at 1024, and nothing at 128.",
+  "caveat_resolved": "The len4096 engines changed THREE things at once, so two single-variable control builds were run to attribute the penalty.",
+  "controls_int8_prefill_ms": {
+   "int8_old      (len1024, batch4, KV4096)": {
+    "512": 157.66,
+    "1024": 312.42
+   },
+   "int8_ctl_kv8k (len1024, batch4, KV8192)": {
+    "512": 156.38,
+    "1024": 306.64
+   },
+   "int8_ctl_b1   (len1024, batch1, KV4096)": {
+    "512": 167.12,
+    "1024": 333.33
+   },
+   "int8_len4096  (len4096, batch1, KV8192)": {
+    "512": 181.78,
+    "1024": 360.86
+   }
+  },
+  "attribution": {
+   "maxKVCacheCapacity 4096->8192": "-0.8% / -1.8% => NO effect (within noise)",
+   "maxBatchSize 4->1": "+6.0% / +6.7% => real, and counter-intuitive: shrinking the profile's max batch makes batch-1 prefill SLOWER. TRT tunes tactics for opt=(maxBatchSize, maxInputLen/2); the batch-4 opt apparently selects kernels that also serve batch 1 better.",
+   "maxInputLen 1024->4096 (opt 512->2048)": "+8.8% / +8.3% => the opt-shape shift itself",
+   "total": "~+15%, and the two causes are independent and roughly additive"
+  },
+  "why_int8_only": "INT4 is W4A16 -- weights are dequantized and the GEMM runs in fp16, a path whose tactic choice is shape-insensitive here. INT8 is W8A8 on native int8 tensor cores, where the tactic/tile space is richer and more shape-sensitive. Mechanism is inferred, not proven.",
+  "practical_consequence": "On this 32 GB device INT8 cannot have both: maxInputLen 4096 with maxBatchSize 4 would very likely exceed the build-memory ceiling, and dropping to batch 1 costs 6%. So INT8's capacity upgrade costs ~15% prefill, of which 6% is forced. INT4 pays nothing at all. Even so INT8 is still 1.57x faster than INT4 at 4096 input (1625.6 vs 2554.6 ms) -- without the penalty it would be ~1.82x."
+ },
+ "build_cost": {
+  "int4_len4096": {
+   "peak_ram_mb": 18587,
+   "wall": "2m33s",
+   "engine": "5.7G"
+  },
+  "int8_len4096": {
+   "peak_ram_mb": 29694,
+   "wall": "4m03s",
+   "engine": "8.9G",
+   "note": "29.7 GB on a ~30 GB machine -- essentially at the ceiling.",
+   "claim_retracted": "I first wrote that maxBatchSize 4->1 was *required* because a batch-4 profile would be 4x larger and would have OOM'd. The control builds disprove that: int8_ctl_b1 (len1024, batch1) already peaked at 29105 MB and int8_ctl_kv8k (len1024, batch4, KV8192) at 27571 MB, so going from len1024 to len4096 added only ~0.6 GB. INT8 build peak is ~28-30 GB regardless of these knobs -- it is dominated by the builder's weight workspace, not by the activation profile. Batch 4 at len 4096 might well have fit. Untested."
+  },
+  "visual_len4096": {
+   "peak_ram_mb": 7163,
+   "wall": "1m11s",
+   "engine": "1.1G"
+  }
+ },
+ "decode_200_iter": {
+  "why": "published TPOT rested on 10 iterations with std 6.89 ms (20% of the mean), so the +-13% CI was wider than the reported precision",
+  "int4_old": 30.78,
+  "int8_old": 49.47,
+  "int4_len4096": 30.65,
+  "int8_len4096": 49.75,
+  "note": "decode is unaffected by the opt shift (its profile is seq=1). Published INT4 TPOT was 32.34 (dog) / 33.93 (repro); the 200-iteration value is 30.78, i.e. 4.8-9.3% lower -- the old 10-iteration numbers were noise-inflated."
+ },
+ "lm_head_quantization_v7_v8": {
+  "date": "2026-07-27",
+  "kernel": "alpamayo-edge-lmhead-2b8b (557 s, both failed)",
+  "v7_2B_single_gpu": "device_map={'':0} -> CUDA OOM, tried to allocate 4.64 GiB, GPU0 had 1.94 GiB free (process already 12.62 GiB for a 4.3 GiB model => quantize footprint is ~3x weights)",
+  "v8_8B_asymmetric": "max_memory={0:'13GiB',1:'7GiB'} -> placement {0:16, 1:19, disk:6}: 6 modules offloaded to DISK -> illegal memory access in AWQ calibration (same class as v4/v6)",
+  "both_hypotheses_refuted": [
+   "'asymmetric budget summing above the 16.34 GiB model prevents spill' -- WRONG: accelerate reserves extra per device, and the spill target was disk, not CPU",
+   "'2B fp16 is only 4.3 GiB so a single T4 is trivially safe' -- WRONG: the quantize process peaks at ~3x the weights"
+  ],
+  "mechanism_finally_identified": "4.64 GiB factorises exactly as calib_batch 16 x seq 512 x vocab 151936 x 4 B (fp32) => quantizing lm_head materialises the full LOGITS tensor for the calibration batch. Its size is set by batch x seq x vocab and is INDEPENDENT of weight size -- which is why switching 8B->2B does not help at all (same vocab 151936, same logits tensor).",
+  "contrast": "8B's earlier v3/v5 OOM asked for 1.16 GiB = 4096 x 151936 x 2 B, i.e. the lm_head WEIGHT -- a different tensor. Both are fatal, by different mechanisms.",
+  "new_cheapest_fix": "drop the AWQ calibration batch from 16 to 1-2 (the documented default is AWQ=16): logits tensor shrinks 8-16x, 4.64 GiB -> 0.29 GiB. Cheaper than waiting for a >=24 GB GPU and should be tried first.",
+  "status": "+19~23% decode gain remains an UNVERIFIED PREDICTION (7 attempts, 0 successes)"
+ }
 }
