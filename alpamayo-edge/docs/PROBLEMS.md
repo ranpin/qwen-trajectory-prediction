@@ -193,9 +193,44 @@ TRTEdge 有现成开关 `--lm_head_quantization int4_awq`，看起来只是加�
    但**完全相同的剩余显存数值**反而揭示了"cap 无效"这个更深的机制。异常里的数值巧合值得追。
 4. 失败要**便宜**：每次 run 都在 15 分钟内失败并留下可读日志，5 次总成本仍小于一次盲目的长跑。
 
+## H2. 抬高 maxInputLen 会静默让 INT8 的 prefill 慢 15%（2026-07-27）
+
+- **现象**：把 `maxInputLen` 从默认 1024 提到 4096 重建引擎后，**INT8 在 512/1024 处的 prefill 反而慢了
+  15.3% / 15.5%**（157.66 → 181.78 ms、312.42 → 360.86 ms），而 **INT4 完全不受影响**（≤0.5%）。
+- **根因**：`cpp/builder/llmBuilder.cpp` 把 TensorRT 优化 profile 写成
+  `optCtxShape = {maxBatchSize, maxInputLen/2, hidden}`、`maxCtxShape = {maxBatchSize, maxInputLen, hidden}`
+  （变量名自证）⇒ **opt 形状被硬编码为 max 的一半**。抬高上限就把 TRT 的调优点从 512 挪到 2048，
+  典型长度反而离最优点更远。
+- **归因（两个单变量对照，各只改一个参数）**：
+
+  | 配置 | prefill@512 | prefill@1024 | 归因 |
+  |---|---|---|---|
+  | `int8` len1024 / b4 / KV4096（原） | 157.66 | 312.42 | 基线 |
+  | `int8_ctl_kv8k` len1024 / b4 / **KV8192** | 156.38 | 306.64 | **KV 容量：无影响** |
+  | `int8_ctl_b1` len1024 / **b1** / KV4096 | 167.12 | 333.33 | **maxBatchSize 4→1：+6.0% / +6.7%** |
+  | `int8_len4096` **len4096** / b1 / KV8192 | 181.78 | 360.86 | 再叠加 **opt 位移：+8.8% / +8.3%** |
+
+  两个原因独立且近似可加。**maxBatchSize 4→1 让 batch-1 自己变慢**这点最反直觉——profile 的
+  opt 是 `(maxBatchSize, maxInputLen/2)`，batch=4 的 opt 似乎让 TRT 选到了对 batch=1 也更友好的 kernel。
+- **为什么只有 INT8**：INT4 是 W4A16（权重反量化后走 fp16 GEMM，tactic 对形状不敏感）；
+  INT8 是 W8A8，跑原生 int8 张量核，tactic/tile 空间更大也更挑形状。**机制是推断，未证明。**
+- **处置**：老引擎（`engines/int4`、`engines/int8`）**一律保留不动**，所有已发布数字仍出自它们；
+  容量升级版另存 `engines/{int4,int8}_len4096`。INT4 的容量升级**零代价**，INT8 要付 ~15%。
+- **教训**：
+  1. **"把上限调大点"不是免费的**——工具可能把调优点绑在上限上。改容量参数后**必须在原来的工作点上重测**。
+  2. 一次改 3 个参数 = 无法归因。**两个单变量对照（共 8 分钟）就把 15% 拆成了 6% + 9% + 0%**，
+     还顺手推翻了我自己"batch 4 会 OOM 所以必须降到 1"的猜测：实测 INT8 build 峰值在
+     27.6–29.7 GB 之间、与这几个参数几乎无关（由权重 workspace 主导，不是激活 profile），
+     len1024→len4096 只多 0.6 GB。**猜的资源账要用实测推翻。**
+
 ## H. 口径与约束的事后复核（2026-07-26）
 
 ### H1. n=210 基准最长请求距引擎输入上限只剩 9 个 token
+> **2026-07-27 追加的更准确说法**：`maxInputLen = 1024` **是 `llm_build` 的默认值**（`--maxInputLen  Default = 1024`），
+> 我们从来没有设过它。所以这不是"侥幸通过"，而是**"没做这个选择"**——上限由工具默认值决定，恰好没被撞破。
+> 同批发现 `maxBatchSize` 默认 4（我们全程只跑 batch=1）、`maxKVCacheCapacity` 默认 4096。
+> 已按实测重建 4096 版引擎，见 §H2。
+
 - **现象**：为回答"我们到底喂了多大的图、多少 token"而复核时发现，基准里 **40 段视频是 5:4**（帧 448×358 → processor 缩到 448×352），
   **154 image token/帧**，而不是此前一律宣称的 112。实测最长的一题（`request_idx 94`）`Computed Tokens = 1015`，
   引擎 `maxInputLen = 1024` ⇒ **余量 9 个 token（99.1% 占满）**。

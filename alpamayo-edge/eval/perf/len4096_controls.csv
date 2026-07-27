@@ -1,0 +1,5 @@
+engine,config,mode,len,e2e_ms
+int8_ctl_b1,len1024_b1_kv4096,prefill,512,167.1166
+int8_ctl_b1,len1024_b1_kv4096,prefill,1024,333.3308
+int8_ctl_kv8k,len1024_b4_kv8192,prefill,512,156.3795
+int8_ctl_kv8k,len1024_b4_kv8192,prefill,1024,306.6369
