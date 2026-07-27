@@ -39,7 +39,11 @@ from transformers import AutoTokenizer, AutoProcessor
 DTYPE = torch.float16
 
 MODEL = "nvidia/Cosmos-Reason2-8B"
-MAXNEW = 160
+MAXNEW = 512   # 2026-07-27: was 160. The Orin side ran with 200 and 8/12 (int4) / 6/12 (int8)
+#              outputs hit the cap, while this reference side capped at 160 -- the two sides being
+#              compared had DIFFERENT budgets, and int4 (cut more often) reported the smaller ppl
+#              increase, so "int4 degrades less than int8" may have been partly a truncation artifact.
+#              Both sides now use 512; the Orin re-run left only 2/12 truncated on each.
 
 # Same 12 prompts the Orin engines ran (greedy, top_k=1).
 PROMPTS = [
