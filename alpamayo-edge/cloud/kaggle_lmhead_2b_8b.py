@@ -146,14 +146,28 @@ _C_new = (
     '\n'
     '    os.makedirs(output_dir, exist_ok=True)\n'
 )
+# --- PATCH D (2026-07-27): AWQ 校准 batch 16 -> 1 ---------------------------
+# v7 的报错数字把真正的自变量指出来了：`Tried to allocate 4.64 GiB`
+#     = calib_batch 16 × seq 512 × vocab 151936 × 4 B(fp32)  —— 精确吻合。
+# ⇒ 量化 lm_head 需要 materialize 整个校准批次的 **logits** 张量，其大小由
+#   batch × seq × vocab 决定，**与权重大小无关**（所以 8B->2B 完全没用，vocab 都是 151936）。
+# 把 batch 降到 1 让该张量缩小 16 倍：4.64 GiB -> 0.29 GiB。
+# 代价：AWQ 的激活统计改为逐条累积而非批内并行，校准变慢（样本数仍是 --num_samples 512
+# 不变，所以统计量的覆盖度不降），且 batch 会影响 AWQ 的 per-channel scale 估计
+# ——**这是一处口径改动，必须在结果里标注**，不能当作无副作用的纯提速。
+_D_old = '            batch_size = 16 if quantization in (None, "int4_awq") else 1'
+_D_new = ('            batch_size = 1  # edge-patch D: was `16 if quantization in (None,"int4_awq") else 1`;\n'
+          '            # the lm_head logits tensor is batch x seq x vocab x 4B and OOMs a 14.56 GiB T4 at batch 16')
+assert _src.count(_D_old) == 1, "PATCH D needle not found — TRTEdge source changed upstream"
 assert _src.count(_A_old) == 1, "PATCH A needle not found — TRTEdge source changed upstream"
 assert _src.count(_B_old) == 1, "PATCH B needle not found — TRTEdge source changed upstream"
 assert _src.count(_C_old) == 1, "PATCH C needle not found — TRTEdge source changed upstream"
 open(QP, "w").write(
     _src.replace(_A_old, _A_new).replace(_B_old, _B_new).replace(_C_old, _C_new)
+        .replace(_D_old, _D_new)
 )
 subprocess.run(f"python -m py_compile {QP}", shell=True, check=True)
-print("[edge-patch] A(device_map) + B(to-dtype) + C(cpu-export) applied OK", flush=True)
+print("[edge-patch] A(device_map) + B(to-dtype) + C(cpu-export) + D(calib batch=1) applied OK", flush=True)
 
 # 3) Environment
 os.environ["PYTHONPATH"] = "/kaggle/working/TRTEdge"
@@ -183,7 +197,7 @@ os.makedirs(ART, exist_ok=True)
 RUNS = [
     ("2b", "nvidia/Cosmos-Reason2-2B", '{"device_map": {"": 0}}'),
     ("8b", "nvidia/Cosmos-Reason2-8B",
-     '{"device_map": "auto", "max_memory": {"0": "13GiB", "1": "7GiB"}}'),
+     '{"device_map": "auto", "max_memory": {"0": "12GiB", "1": "12GiB"}}'),
 ]
 
 status = {}
