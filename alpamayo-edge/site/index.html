@@ -82,7 +82,7 @@ footer a{color:var(--accent)}
   <ol style="margin-top:0">
     <li><strong>量化既提速又是 32GB 边缘的唯一可部署方案</strong>：decode 比 FP16 快 <strong>2.66×(INT4)/1.70×(INT8)</strong>、E2E 快 2.5×；FP16 在 32GB dog 上 build(峰 55GB)与载入(15GB 引擎+缓存)<strong>双双 OOM</strong>，只能在 64GB goat 跑，dog 部署 INT4/INT8。</li>
     <li><strong>量化无显著正确率损失</strong>：真实基准(n=210)上 FP16 76.2% / INT8 75.2% / INT4 73.8%，差异 <strong>全部统计不显著(McNemar p&gt;0.4、95%CI 重叠)</strong>。即量化在任务正确率上几乎无损。</li>
-    <li><strong>选型：decode 看 INT4、prefill 看 INT8</strong>——INT4 decode 快 1.57×/更省电/更省显存(−42%)，INT8 prefill 快 1.9×/能效高 2.3×；生成越长 INT4 的 E2E 越占优。</li>
+    <li><strong>选型随负载形状翻转（§1.9，本轮修正）</strong>：<strong>输出 token &lt; 输入 token / 83 时 INT8 更快</strong>，反之 INT4 更快。INT4 decode 快 1.61×/能效高 64%/显存省 42%；INT8 prefill 快 1.9×/能效高 2.3× ⇒ <strong>长文本生成选 INT4；看图答短答案（本项目基准正是这种）选 INT8 —— n=210 基准实测 INT8 快 1.43×</strong>。</li>
   </ol>
   <table class="io-table">
     <caption><strong>表 1</strong>　本项目部署标的与暂缓轨道的输入 / 输出对照。</caption>
@@ -167,11 +167,30 @@ footer a{color:var(--accent)}
     <tr><td>总体 Wilson 95%CI / vs FP16</td><td>[70.0,81.4]</td><td>[67.5,79.3]，p=0.42 不显著</td><td>[69.0,80.6]，p=0.85 不显著</td></tr>
   </table>
 
+  <p style="font-size:13.5px;color:var(--muted)">但<strong>正确率是这个任务的错误头条指标</strong>：210 道题<strong>全部是二选一 yes/no</strong>（答案 105 A / 105 B 完全平衡），
+  所以<strong>随机猜的基线是 50%</strong>，满分空间只有 26.2 个百分点。按二分类该报的指标看，量化的退化不是均匀的，而是<strong>决策阈值整体向"否"偏移</strong>。</p>
+  <table>
+    <caption>表 4　任务匹配的二分类指标（n = 210，随机基线 50%）。yes/no 与 A/B 的对应在题间随机，故语义偏置（总答"否"）与位置偏置（总选"A"）可分离。脚本 <code>eval/accuracy/benchmark/task_metrics.py</code>。</caption>
+    <thead><tr><th>精度</th><th>正确率</th><th>高于随机</th><th>相对信号损失</th><th>TPR<br>(识别"成功")</th><th>TNR<br>(识别"失败")</th><th>平衡正确率</th><th>Cohen κ</th><th>答"yes"比例</th><th>选"A"比例</th></tr></thead>
+    <tbody>
+      <tr><td>真值</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>56.2%</td><td>50.0%</td></tr>
+      <tr><td>FP16 参考</td><td>76.2%</td><td>26.2 pts</td><td>—</td><td>0.763</td><td>0.761</td><td>76.2%</td><td>0.520</td><td>53.3%</td><td>54.8%</td></tr>
+      <tr><td>INT8 (SmoothQuant)</td><td>75.2%</td><td>25.2 pts</td><td>−3.6%</td><td>0.695</td><td>0.826</td><td><strong>76.1%</strong></td><td>0.509</td><td>46.7%</td><td>51.9%</td></tr>
+      <tr><td>INT4 (AWQ)</td><td>73.8%</td><td>23.8 pts</td><td>−9.1%</td><td>0.678</td><td>0.815</td><td>74.7%</td><td>0.481</td><td>46.2%</td><td>53.3%</td></tr>
+      <tr><td>INT4 · 2B</td><td>65.2%</td><td>15.2 pts</td><td>−41.8%</td><td><strong>0.458</strong></td><td>0.902</td><td>68.0%</td><td>0.338</td><td>30.0%</td><td>52.4%</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:13px;color:var(--muted)"><strong>读法</strong>：FP16 是对称的（TPR 0.763 ≈ TNR 0.761）；量化后 TPR 掉、TNR 反升 —— 模型变得更容易回答"没成功"。
+  2B 最极端：只有 30% 答 yes，<strong>TPR 0.458 已低于随机</strong>，基本在猜"否"。<br>
+  <strong>不是位置偏置</strong>：三方"选 A"比例都稳在 51.9–54.8%，所以这是<strong>语义</strong>偏移而非字母偏好。<br>
+  <strong>部署含义</strong>：作为失败监测器，量化后的模型更"保守"——少漏报失败、多误报失败。这个方向对安全监控可能可接受甚至可取，但它是一次真实的行为改变，<strong>单看正确率完全看不见</strong>。INT8 的平衡正确率 76.1% 几乎等于 FP16 的 76.2%，也只有这个指标能看出来。<br>
+  <strong>统计功效</strong>：本设计的<strong>最小可检测效应 MDE ≈ 6.7 pts</strong>（配对 McNemar、80% power、不一致率 11.9%）。INT4 观测到的 −2.4 pts <strong>远低于 MDE</strong>，所以"不显著"只能读作"<strong>在 6.7 pts 的分辨率下未发现差异</strong>"，<strong>不是</strong>"没有差异"。要让 −2.4 pts 变显著需 n ≈ 1,650；INT8 的 −1.0 pts 需 n ≈ 10,700。⇒ 扩样本到 510 也不会翻案，真正该换的是指标与任务难度。</p>
+
   <h3>1.3 精度（辅助）：细粒度 perplexity 探针</h3>
   <p style="font-size:13.5px;color:var(--muted)">补充一个更细粒度的相对指标：12 条驾驶/推理 prompt 上，用 FP16 模型对量化输出做 teacher-forced perplexity（比 MC 正确率更敏感，能区分 INT4/INT8）。</p>
   <figure><img src="figures/accuracy_dropoff.png" alt="quantization drop-off vs FP16"><figcaption><b>图 11 · 相对 FP16 的 perplexity 增幅与一致前缀</b><br><b>横轴</b>：左=平均 perplexity 指标，右=与 FP16 的一致性(一致前缀占比 % / 一致前缀长度 token)<br><b>竖轴</b>：左=perplexity(越低越贴近 FP16，绿虚线为 FP16 基线 1.237)，右=百分比 / token 数<br><b>结果</b>：INT4(AWQ) 精度损失 +9.8% 显著小于 INT8(SmoothQuant) +18.1%，且贪心路径跟随 FP16 更久<br><b>分析</b>：INT4(W4A16 纯权重、激活保 16bit)对校准质量更鲁棒；INT8(W8A8)连激活也量化更敏感 → 精度损失更大（校准集消融见"思考讨论"：域内小集反而更差，覆盖度比域匹配更关键）</figcaption></figure>
   <table>
-    <caption><strong>表 4</strong>　各精度 perplexity 与相对 FP16 的一致前缀（12 条 prompt，teacher-forced，相对口径）。</caption>
+    <caption><strong>表 5</strong>　各精度 perplexity 与相对 FP16 的一致前缀（12 条 prompt，teacher-forced，相对口径）。</caption>
     <tr><th>指标</th><th>FP16 参考</th><th>INT4 (AWQ)</th><th>INT8 (SmoothQuant)</th></tr>
     <tr><td>平均 perplexity（越低越好）</td><td>1.237</td><td class="win">1.359</td><td>1.460</td></tr>
     <tr><td>PPL 相对 FP16 增幅</td><td>—</td><td class="win">+9.8%</td><td>+18.1%</td></tr>
@@ -182,7 +201,7 @@ footer a{color:var(--accent)}
   <p>把实测工作点画到 Orin 的 roofline 上，前面三处反常（INT4 prefill 不快于 FP16、INT8 prefill 快 1.87×、INT4 decode 只快 2.66× 而非 3.16×）就都有了定量解释，而非事后叙述。</p>
   <figure><img src="figures/roofline.png" alt="roofline analysis"><figcaption><b>图 12 · Orin roofline 与实测工作点</b><br><b>横轴</b>：算术强度 AI（每字节的 FLOP/OP 数，对数轴）<br><b>竖轴</b>：可达吞吐（TFLOP/s 或 TOP/s，对数轴）；斜线=带宽屋顶（实线 204.8 GB/s 峰值、点线 150 GB/s 可达），平顶=算力屋顶（INT8 85 TOP/s、FP16 43 TFLOP/s，均为 GPU 稠密值）<br><b>结果</b>：decode 三精度 AI 仅 1.0–3.2，全部贴在带宽斜坡上，实测带宽 <strong>143–170 GB/s = 峰值的 70–83%</strong>；prefill 三精度 AI 512–1616，全部落在各自算力平顶下方 <strong>57–61%</strong>，且 <strong>INT4 贴的是 FP16 顶（25.5 vs FP16 26.0 TFLOP/s）而不是 INT8 顶</strong><br><b>分析</b>：脊点 = 43 TFLOP/s ÷ 204.8 GB/s ≈ <strong>210 FLOP/byte</strong>。decode 的 AI 比脊点低 67–210×⇒ 纯访存墙，故 <strong>INT4 decode 的加速上限就是字节比 15.15/4.8 = 3.16×</strong>，实测 2.66× 的缺口来自带宽效率随权重变小而下降（82.9%→69.7%，固定开销占比上升）。prefill 的 AI 远高于脊点 ⇒ 计算墙：<strong>W4A16 的上限是 FP16 的 43 TFLOP/s 而非 INT8 的 85 TOP/s</strong>——TensorRT 权重量化会把 INT4 权重<strong>先反量化再做高精度点积</strong>（官方文档明示），所以 INT4 prefill 结构上不可能快过 FP16；INT8(W8A8) 用原生 int8 张量核、上限翻倍，才有 1.87×。</figcaption></figure>
   <table>
-    <caption><strong>表 5</strong>　Roofline 量化核对（orin-goat，MAXN，batch = 1）。AI 与可达吞吐均由实测延迟 / 实测引擎字节数推出；算力上限取 GPU <strong>稠密</strong>峰值（FP16 43 TFLOP/s、INT8 85 TOP/s），<strong>不含 DLA</strong>——NVIDIA 宣传的 275 TOPS 是 GPU 稀疏 170 + 双 DLA 稀疏 105，GPU-only 稠密口径仅为其 31%。</caption>
+    <caption><strong>表 6</strong>　Roofline 量化核对（orin-goat，MAXN，batch = 1）。AI 与可达吞吐均由实测延迟 / 实测引擎字节数推出；算力上限取 GPU <strong>稠密</strong>峰值（FP16 43 TFLOP/s、INT8 85 TOP/s），<strong>不含 DLA</strong>——NVIDIA 宣传的 275 TOPS 是 GPU 稀疏 170 + 双 DLA 稀疏 105，GPU-only 稠密口径仅为其 31%。</caption>
     <tr><th>精度</th><th>Decode AI<br><span style="font-weight:400;font-size:12px">FLOP/byte</span></th><th>Decode 实测带宽<br><span style="font-weight:400;font-size:12px">（占 204.8 GB/s 峰值）</span></th><th>Prefill AI<br><span style="font-weight:400;font-size:12px">FLOP/byte</span></th><th>Prefill 实测吞吐<br><span style="font-weight:400;font-size:12px">（占所用上限）</span></th><th>所用算力上限</th></tr>
     <tr><td>FP16</td><td>1.00</td><td>169.7 GB/s（<strong>82.9%</strong>）</td><td>512</td><td>26.0 TFLOP/s（60.5%）</td><td>43 TFLOP/s (FP16)</td></tr>
     <tr><td>INT8 (SmoothQuant)</td><td>1.83</td><td>158.3 GB/s（77.3%）</td><td>935</td><td>48.7 TOP/s（57.3%）</td><td class="win">85 TOP/s (INT8 原生)</td></tr>
@@ -200,7 +219,7 @@ footer a{color:var(--accent)}
   <p>Roofline 说 decode 是访存墙、且只跑到峰值带宽的 ~70%。那 30% 的缺口具体丢在哪个 kernel？用 Nsight Systems 在真机上逐 kernel 剖析（<strong>关键：必须加 <code>--cuda-graph-trace=node</code></strong>，否则 20 次计时迭代都在已捕获的 CUDA graph 里被折叠成一个区间，只有 3 次慢速 warmup 会被归因，得到的份额是错的）。</p>
   <figure><img src="figures/kernel_breakdown.png" alt="kernel-level decode breakdown"><figcaption><b>图 13 · Kernel 级 decode 分解（时间与字节）</b><br><b>横轴</b>：左=每生成 token 的耗时(ms)，右=每 token 需搬运的引擎字节(GB)<br><b>竖轴</b>：左=kernel 类别，右=引擎权重按角色分类<br><b>结果</b>：<strong>W4A16 GEMV 占 72.1%</strong>(24.39 ms)、<strong>lm_head 的 fp16 GEMM 占 22.0%</strong>(7.46 ms)、attention 仅 2.7%、已融合的 elementwise 仅 3.2%；四项合计 33.8 ms ≈ 实测 TPOT 33.1 ms。字节侧：INT4 权重 3.473 GB(71.6%)、AWQ scales+zeros 0.136 GB、<strong>lm_head 仍是 fp16 未量化，占 1.245 GB = 25.6%</strong>；合计 4.853 GB 与实测引擎文件 4.847 GB 仅差 <strong>+0.13%</strong><br><b>分析</b>：三点可执行结论。① <strong>lm_head 根本没被量化</strong>——AWQ 默认跳过输出层，于是它独占四分之一的 decode 字节；而且 M=1 却被调度到 <code>tilesize64x96</code> 的 GEMM kernel（grid=(1,1583,1)，1583×96=151968≈vocab 151936，据此确认其身份）。② 各 kernel 实测有效带宽：GEMV <strong>147.9 GB/s(峰值 72.2%)</strong>、lm_head <strong>166.9 GB/s(81.5%)</strong>、整体 146.5 GB/s(71.5%)——<strong>效率最低的恰是占比最大的 GEMV</strong>，这就是手写 kernel 的目标空间。③ <strong>TRT 已经把 RMSNorm/RoPE/SwiGLU 融合掉了</strong>（kernel 名 <code>__myl_AddCasMulMeaAddSqrDivMulCasMulMulMul</code> 即融合链）且 CUDA graph 已启用，故"算子融合 + 降 launch 开销"这条常规优化路线在此<strong>几乎没有空间</strong>（合计仅 3.2%）——这是个诚实的负结果。</figcaption></figure>
   <table>
-    <caption><strong>表 6</strong>　由 kernel 剖析推出的两条优化余量（预测值，<strong>尚未实施</strong>）。字节数由实测 config 解析、并与引擎文件大小自校验到 +0.13%；有效带宽 = 解析字节 ÷ 实测 kernel 耗时（Nsight Compute 硬件计数器需 root，本机 sudo 无密码 → 不可用，故用此推算口径）。</caption>
+    <caption><strong>表 7</strong>　由 kernel 剖析推出的两条优化余量（预测值，<strong>尚未实施</strong>）。字节数由实测 config 解析、并与引擎文件大小自校验到 +0.13%；有效带宽 = 解析字节 ÷ 实测 kernel 耗时（Nsight Compute 硬件计数器需 root，本机 sudo 无密码 → 不可用，故用此推算口径）。</caption>
     <tr><th>优化项</th><th>机理</th><th>字节变化</th><th>预测 TPOT / 吞吐</th><th>代价 / 风险</th></tr>
     <tr><td><strong>A. 把 lm_head 也量化到 INT4</strong></td><td>消掉 1.245 GB 的 fp16 输出层，decode 是访存墙 ⇒ 时间近似按字节等比下降</td><td>4.853 → <strong>3.932 GB</strong>（−19%）</td><td class="win">33.1 → ≈26.8 ms<br>30.2 → <strong>≈37.3 tok/s（+23%）</strong></td><td>输出层对量化更敏感，需用 n=210 基准实测精度损失</td></tr>
     <tr><td>B. 手写 W4A16 GEMV 提升带宽效率<br><span style="font-size:12px;color:var(--err)"><strong>← 已被 1.6 节实测推翻</strong></span></td><td>本以为 GEMV 只到「峰值」72.2% 尚有余量；但 <strong>该口径错了</strong>——分母应为实测可达带宽 152.3 GB/s，TRT 已达其 <strong>97.1%</strong></td><td>不变</td><td><span style="color:var(--err)">原预测 +10% 不成立</span><br>真实上限 ≈ <strong>+2%</strong> 端到端</td><td>见 1.6 节：此路基本不通</td></tr>
@@ -234,13 +253,44 @@ footer a{color:var(--accent)}
     <strong>出路</strong>：需要单卡 ≥24 GB（L4 / A6000 / A100），让 8B 权重 + 1.16 GiB 临时张量无需分片即可容纳，从而同时避开两个失败模式。完整的 5 次实验记录见 <a href="https://github.com/ranpin/qwen-trajectory-prediction/blob/alpamayo-edge/alpamayo-edge/docs/PROBLEMS.md" target="_blank" style="color:var(--accent)">PROBLEMS.md G3</a>。
   </div>
 
+
+  <h3>1.9 选 INT4 还是 INT8？取决于负载形状（修正了本页早前的表述）</h3>
+  <p>前面 §1.1 给出的是"decode 看 INT4、prefill 看 INT8"。这在<strong>生成密集</strong>的负载上成立，但本项目真正的负载是
+  <strong>长多模态输入 + 极短输出</strong>（一张选择题：759 个输入 token，输出 1 个字母）——这种负载由 prefill 主导，
+  而<strong>权重量化对 prefill 无效</strong>（§1.4 已证 INT4 prefill ≈ FP16），INT8 走原生 int8 核才有 1.87×。所以必然存在一个交叉点。</p>
+  <figure>
+    <img src="figures/precision_crossover.png" alt="INT4 与 INT8 的选择随输入/输出 token 比翻转">
+    <figcaption><strong>图 17 · 精度选择随负载形状翻转（orin-dog，MAXN，batch 1）</strong><br>
+    <strong>左图横轴</strong>：输出 token 数；<strong>左图竖轴</strong>：端到端延迟 (s)。粗线 = 4096 输入，浅线 = 512 输入；空心圈 = 交叉点。<br>
+    <strong>右图横轴</strong>：输入 token 数（图像 + 文字，对数）；<strong>右图竖轴</strong>：输出 token 数（对数）。黑线 = 盈亏边界，橙区 = INT8 更快，蓝区 = INT4 更快，★ = 实测工作点。<br>
+    <strong>结果</strong>：边界为 <strong>输出 token = 输入 token / 83</strong>，在 512/1024/2048/4096 四处稳定（81.8/83.2/83.4/84.2）。
+    n=210 基准（759 in / 1 out）从运行日志切出推理段<strong>实测 INT8 比 INT4 快 1.43×</strong>；而已发布的 512 in / 128 out 场景 INT4 快 1.49×。<br>
+    <strong>分析</strong>：交叉点由"INT8 省下的 prefill 时间"与"INT8 每个输出 token 多花 19.1 ms"的比值决定。
+    图中 INT8 还背着 §H2 那 15% 的 opt 惩罚，所以这个结论是<strong>保守</strong>的——按各自最优配置，边界移到 输入/66，INT8 的获胜区更大。
+    ⇒ <strong>VLM 理解类任务（看图答短答案）应选 INT8；长文本生成类任务才选 INT4。</strong></figcaption>
+  </figure>
+  <table>
+    <caption>表 8　同配置引擎对的 prefill 实测与盈亏平衡输出长度（orin-dog，batch 1，10 次迭代）。decode 用 200 次迭代：INT4 30.78 ms、INT8 49.75 ms。</caption>
+    <thead><tr><th>输入 token</th><th>INT4 prefill</th><th>INT8 prefill</th><th>INT8 省下</th><th>盈亏平衡输出长度</th><th>输入/输出 比</th></tr></thead>
+    <tbody>
+      <tr><td>512</td><td>301.2 ms</td><td>181.8 ms</td><td>119.5 ms</td><td>6.3 token</td><td>81.8</td></tr>
+      <tr><td>1024</td><td>595.9 ms</td><td>360.9 ms</td><td>235.0 ms</td><td>12.3 token</td><td>83.2</td></tr>
+      <tr><td>2048</td><td>1212.2 ms</td><td>743.4 ms</td><td>468.8 ms</td><td>24.6 token</td><td>83.4</td></tr>
+      <tr><td><strong>4096</strong>（≈1 帧原生 1080p）</td><td><strong>2554.6 ms</strong></td><td><strong>1625.6 ms</strong></td><td>929.0 ms</td><td>48.7 token</td><td>84.2</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:13px;color:var(--muted)"><strong>顺带两个副产品</strong>：① <strong>TTFT@4096 = 2554.6 ms</strong>，事前预测 2650 ms（误差 −3.6%）——
+  长输入 prefill 可由「matmul 2·P·n + attention 144·n²·d ÷ 实测 27.1 TFLOP/s」预测到 4% 内。加上视觉编码器约 0.85 s，
+  <strong>一帧原生 1080p 的 TTFT ≈ 3.4 s，即约 0.3 Hz</strong>——真实分辨率下这台机器是<strong>秒级而非帧级</strong>。
+  ② decode 改用 200 次迭代后 INT4 TPOT 为 <strong>30.78 ms</strong>，此前 10 次迭代报的 32.34/33.93 ms 偏高 4.8–9.3%（std 6.89 = 均值的 20%），属噪声。</p>
+
   <h2>二、方法细节（可复现）</h2>
 
   <h3 id="io">2.1 输入是什么、输出是什么（先看这个）</h3>
   <p>这一节回答最基本的问题：<strong>这套系统喂进去什么、吐出来什么</strong>。下面这张图里的图像、问题、输出<strong>全部是真实运行的原文</strong>（INT4 引擎、orin-dog 实测，产物在 <code>eval/io_example/</code>）。</p>
-  <figure><img src="figures/io_example.png" alt="real input and output example"><figcaption><b>图 17 · 真实输入 → 真实输出实例（逐字未改）</b><br><b>上排</b>：输入之一 = <strong>6 帧视频画面</strong>（我们把长边缩到 448 px → 实为 448×252，processor 再缩到 32 的整数倍 <strong>448×256</strong>），经<strong>视觉编码器 ViT</strong>（<code>qwen3_vl_vision</code>，27 层，fp16）编码为 <strong>每帧 112 个 image token，共 672 个</strong>（完整预处理链见图 2）<br><b>中排</b>：输入之二 = <strong>一段文字问题</strong>（本例 87 token）。两者拼成 <strong>759 token</strong> 的 prompt 送入 prefill<br><b>下排</b>：输出 = <strong>自回归生成的文字</strong>（本例生成到 110 token 上限被截断，故末句未完）<br><b>说明</b>：同一个引擎在基准评测模式下，问题结尾改成"Answer with ONLY the single letter"，输出就退化为<strong>单个字母</strong>（如 <code>A</code>）——这正是 n=210 正确率所打分的对象。所以"输出格式"完全由 prompt 决定，模型本身始终是<strong>文本生成</strong>。</figcaption></figure>
+  <figure><img src="figures/io_example.png" alt="real input and output example"><figcaption><b>图 18 · 真实输入 → 真实输出实例（逐字未改）</b><br><b>上排</b>：输入之一 = <strong>6 帧视频画面</strong>（我们把长边缩到 448 px → 实为 448×252，processor 再缩到 32 的整数倍 <strong>448×256</strong>），经<strong>视觉编码器 ViT</strong>（<code>qwen3_vl_vision</code>，27 层，fp16）编码为 <strong>每帧 112 个 image token，共 672 个</strong>（完整预处理链见图 2）<br><b>中排</b>：输入之二 = <strong>一段文字问题</strong>（本例 87 token）。两者拼成 <strong>759 token</strong> 的 prompt 送入 prefill<br><b>下排</b>：输出 = <strong>自回归生成的文字</strong>（本例生成到 110 token 上限被截断，故末句未完）<br><b>说明</b>：同一个引擎在基准评测模式下，问题结尾改成"Answer with ONLY the single letter"，输出就退化为<strong>单个字母</strong>（如 <code>A</code>）——这正是 n=210 正确率所打分的对象。所以"输出格式"完全由 prompt 决定，模型本身始终是<strong>文本生成</strong>。</figcaption></figure>
   <table>
-    <caption><strong>表 7</strong>　三个层次的输入 / 输出，别混淆：①运行时系统 ②一次性构建流水线 ③评测。前两者常被混为一谈，是"讲不清这个项目做了什么"的主要原因。</caption>
+    <caption><strong>表 9</strong>　三个层次的输入 / 输出，别混淆：①运行时系统 ②一次性构建流水线 ③评测。前两者常被混为一谈，是"讲不清这个项目做了什么"的主要原因。</caption>
     <tr><th>层次</th><th>输入</th><th>输出</th><th>频率 / 在哪跑</th></tr>
     <tr><td><strong>① 运行时系统</strong><br><span style="font-size:12px;color:var(--muted)">= 部署完成后每来一个请求</span></td><td><strong>N 帧图像</strong>（长边 448 px；processor 再缩到 32 的整数倍 ⇒ <strong>112 token/帧</strong>@448×256、<strong>154</strong>@448×352）<br>＋ <strong>文字问题</strong><br><span style="font-size:12px;color:var(--muted)">prompt 总长 ≤ maxInputLen 1024（见图 2）</span></td><td><strong>文字</strong>：场景描述 / 风险判断 / 行动建议<br><span style="font-size:12px;color:var(--muted)">格式由 prompt 决定（散文 或 单字母）</span></td><td>每请求一次<br><strong>Jetson Orin 上</strong></td></tr>
     <tr><td><strong>② 构建流水线</strong><br><span style="font-size:12px;color:var(--muted)">= 我们做的"算法/工程"部分</span></td><td><strong>HF fp16 预训练权重</strong>（Cosmos-Reason2-8B）<br>＋ <strong>校准集</strong>（cnn_dailymail 512 篇）</td><td><strong>2 个设备专用 TensorRT 引擎</strong><br>LLM（INT4 4.85 GB / INT8 8.30 GB）＋ 视觉编码器（fp16 1.17 GB）</td><td><strong>一次性</strong><br>量化在云 T4×2，建引擎在 Orin</td></tr>
@@ -254,7 +304,7 @@ footer a{color:var(--accent)}
   </div>
 
   <h3>2.2 方法总览（端到端流程 · 为什么这么设计）</h3>
-  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 18 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
+  <figure><img src="figures/pipeline.png" alt="端到端流程：云端量化 → 边缘部署 → 实测评测" style="max-width:560px;margin:0 auto"><figcaption style="text-align:center"><b>图 19 · 端到端方法流程</b><br>源权重 → 云端量化导出 ONNX → Orin 建引擎 → 边缘推理 → 性能/精度评测。</figcaption></figure>
   <p><strong>描述</strong>：预训练权重在云端一次性量化并导出为 ONNX，传到 Orin 编译成设备专用 TensorRT 引擎，再在边缘实测性能与精度两轴。</p>
   <p style="margin-bottom:4px"><strong>为什么这么设计（关键选择的理由）：</strong></p>
   <ol style="margin-top:0">
@@ -276,9 +326,10 @@ footer a{color:var(--accent)}
 
   <h2>三、思考讨论</h2>
   <div class="callout ok">
-    <div class="t">选型结论：decode 看 INT4，prefill 看 INT8</div>
-    ① 交互式 / 单流低延迟 / 省电 → <strong>INT4</strong>：decode 吞吐高 57%、能效高 64%、显存省 42%；任务正确率与 INT8 持平、perplexity 略优。<br>
-    ② 批量 / 长上下文 / 高吞吐 → <strong>INT8</strong>：prefill 快 1.9×、能效高 2.3×、功耗更低。<br>
+    <div class="t">选型结论：按负载形状选 —— 输出 token &lt; 输入 token / 83 选 INT8，否则选 INT4（§1.9）</div>
+    ① <strong>长文本生成</strong>（输出多、输入短）→ <strong>INT4</strong>：decode 吞吐高 61%、能效高 64%、显存省 42%。<br>
+    ② <strong>看图答短答案 / 长上下文理解</strong>（输入多、输出少 —— 本项目基准与多相机 VLM 都属此类）→ <strong>INT8</strong>：prefill 快 1.9×、能效高 2.3×、功耗更低；n=210 基准<strong>实测比 INT4 快 1.43×</strong>。<br>
+    ③ 分界线：<strong>输出 token = 输入 token / 83</strong>（各自最优配置下为 /66）。根因见 §1.4——<strong>权重量化对 prefill 无效</strong>（INT4 prefill ≈ FP16），只有 W8A8 走原生 int8 核才提速。<br>
     <span style="color:var(--muted)">两者在各自阶段既更快又更省电，按场景选档即可。</span>
   </div>
   <div class="callout">
@@ -296,6 +347,7 @@ footer a{color:var(--accent)}
   </ul>
   <h3>诚实的边界</h3>
   <ul>
+    <li><strong>辅助 perplexity 指标有截断 confound（2026-07-27 自查发现，已修一半）</strong>：12-prompt 探针的生成上限设得太小，<strong>INT4 有 8/12、INT8 有 6/12 条撞上限被截断</strong>；而且 FP16 参考侧用的是另一个上限（Kaggle 侧 max_new_tokens=160 vs Orin 侧 200）——<strong>被比较的两侧预算不一致</strong>。方向上不利于当前结论：INT4 被截得更多，却报出更小的 perplexity 增幅，故"INT4 退化小于 INT8"<strong>可能部分是截断造成的假象</strong>。已用 512 上限重跑 Orin 侧（INT4 截断由 8/12 降到 2/12、最长输出 964→2300 字符），FP16 参考侧需一次云端重跑才能配平，结果出来后会更新 §1.3。<strong>主指标 MC 正确率不受影响</strong>——210×3 条输出全部以 end-of-sequence 结束、全部可解析、无一条撞上限。</li>
     <li><strong>输入长度只剩 0.9% 余量（事后才发现）</strong>：引擎 <code>maxInputLen=1024</code> 是构建时钉死的；n=210 里最长的一题实测 <strong>1015 token</strong>（40 段 5:4 视频是 154 token/帧，6 帧就 924），<strong>只剩 9 个 token</strong>。日志无截断告警、210 条全部返回，故已发布正确率不受影响，但当初没算这笔账；要加帧数或加长题干必须以更大 <code>maxInputLen</code> 重建引擎（见图 2）。</li>
     <li><strong>基准范围</strong>：用 <strong>Cosmos-Reason1-Benchmark 的 robovqa+robofail（n=210，具身机器人推理，非驾驶）</strong>——这是 repo 内<strong>自带视频</strong>的全部；其余 3 子集(agibot/bridgev2/holoassist，共 300)仅有标注、视频需从外部源数据集下载匹配，官方 AV 子集未发布 → 全 510 需外部视频流水线(future work)。<strong>无 Cosmos-Reason2-Benchmark（不存在），故用同族的 R1-Benchmark 评测 R2 模型（标准做法）</strong>。视频按 6 帧@448 采样（非官方原生协议，绝对分不追求复现论文；三精度同帧→精度损失可比）。</li>
     <li><strong>FP16 只能在 64GB goat 跑</strong>：32GB dog 上 FP16 既 build OOM(55GB)、载入也 OOM(15GB 引擎+缓存到顶) → FP16 的 TTFT/TPOT 在 goat 测；INT4/INT8 两机 &lt;3% 已交叉复现，加速比取 goat 同机测量。</li>

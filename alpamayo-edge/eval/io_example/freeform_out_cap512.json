@@ -1,0 +1,48 @@
+{
+    "input_file": "/home/vision/chenrunbin/alpamayo-edge/io/freeform_in_cap512.json",
+    "responses": [
+        {
+            "batch_idx": 0,
+            "finish_reason": "end-of-sequence",
+            "formatted_complete_request": "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|>You are shown 6 frames sampled in order from a video of a robot performing a task. Describe what happens across the frames, then judge whether the action looks safe and whether the task succeeded. Answer in 2-3 sentences.<|im_end|>\n<|im_start|>assistant\n",
+            "formatted_system_prompt": "",
+            "messages": [
+                {
+                    "content": [
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_0_0.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_0_1.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_0_2.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_0_3.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_0_4.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "image": "/home/vision/bench/frames/robovqa_0_5.jpg",
+                            "type": "image"
+                        },
+                        {
+                            "text": "You are shown 6 frames sampled in order from a video of a robot performing a task. Describe what happens across the frames, then judge whether the action looks safe and whether the task succeeded. Answer in 2-3 sentences.",
+                            "type": "text"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "output_text": "The video shows a hand using green tongs to interact with a basket of colorful toys on a kitchen counter. The tongs move from the right side of the frame toward the basket, suggesting an attempt to pick up or manipulate one of the toys. The surrounding environment includes a cereal dispenser, a black container, and a stack of paper cups, all remaining static throughout the sequence. The action appears safe, with no risk of collision or unintended contact with other objects. However, the task of picking up a specific toy is not clearly completed within the visible frames, leaving the outcome uncertain.",
+            "request_idx": 0
+        }
+    ]
+}

@@ -1,4 +1,14 @@
-# 量化掉点评测（vs FP16 基线）
+# 量化精度损失评测（vs FP16 基线）
+
+> **2026-07-27 截断 confound 与半程修复**：12-prompt 探针原先的生成上限过小，
+> **INT4 有 8/12、INT8 有 6/12 条撞上限被截断**，且 FP16 参考侧用的是另一个上限
+> （Kaggle `max_new_tokens=160` vs Orin 侧 `max_generate_length=200`）——**被比较的两侧预算不一致**。
+> 方向上不利于已发布结论：INT4 被截得更多却报出更小的 perplexity 增幅，故"INT4 退化小于 INT8"**可能部分是假象**。
+> 已用 **512** 上限重跑 Orin 侧（`orin_int4_outputs_cap512.json` / `orin_int8_outputs_cap512.json`，
+> 脚本 `scripts/orin/rerun_untruncated.sh`）：**两方现在都只剩 2/12 截断，不对称性消除**；
+> 中位输出 INT4 1549 / INT8 784 字符（此前最长只有 964/1021）。
+> **仍缺**：FP16 参考侧要按同一 512 预算做一次云端重跑才能重算 perplexity；在那之前 §1.3 的数字保持原样，
+> 并已在站点「诚实的边界」标注此 confound。**主指标 MC 正确率不受影响**——210×3 条全部 `end-of-sequence`、全部可解析。
 
 补齐"精度轴"：量化 INT4/INT8 相对 FP16 原模型掉多少。结果与结论见
 [`../../docs/edge_deploy_status.md`](../../docs/edge_deploy_status.md) 的"量化掉点"节。

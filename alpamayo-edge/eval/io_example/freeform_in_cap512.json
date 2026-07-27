@@ -1,0 +1,46 @@
+{
+ "batch_size": 1,
+ "temperature": 0.0,
+ "top_p": 1.0,
+ "top_k": 1,
+ "max_generate_length": 512,
+ "requests": [
+  {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "image": "/home/vision/bench/frames/robovqa_0_0.jpg"
+      },
+      {
+       "type": "image",
+       "image": "/home/vision/bench/frames/robovqa_0_1.jpg"
+      },
+      {
+       "type": "image",
+       "image": "/home/vision/bench/frames/robovqa_0_2.jpg"
+      },
+      {
+       "type": "image",
+       "image": "/home/vision/bench/frames/robovqa_0_3.jpg"
+      },
+      {
+       "type": "image",
+       "image": "/home/vision/bench/frames/robovqa_0_4.jpg"
+      },
+      {
+       "type": "image",
+       "image": "/home/vision/bench/frames/robovqa_0_5.jpg"
+      },
+      {
+       "type": "text",
+       "text": "You are shown 6 frames sampled in order from a video of a robot performing a task. Describe what happens across the frames, then judge whether the action looks safe and whether the task succeeded. Answer in 2-3 sentences."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
