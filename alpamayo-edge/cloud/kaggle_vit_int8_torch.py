@@ -146,14 +146,21 @@ _C_new = (
     '\n'
     '    os.makedirs(output_dir, exist_ok=True)\n'
 )
+# --- PATCH D：AWQ 校准 batch 16 -> 1 ---------------------------------------
+# v3 去掉 D 的结果是在加载/dtype 阶段 CUDA OOM（GPU0 只剩 4.81 MiB）。与 lm_head v9
+# （同为 max_memory 12/12、成功）唯一的差别就是这个 batch，故加回来。
+# 顺带好处：与 lm_head INT4 那版的量化配方一致，便于对比。
+_D_old = '            batch_size = 16 if quantization in (None, "int4_awq") else 1'
+_D_new = '            batch_size = 1  # edge-patch D'
+assert _src.count(_D_old) == 1, "PATCH D needle not found — TRTEdge source changed upstream"
 assert _src.count(_A_old) == 1, "PATCH A needle not found — TRTEdge source changed upstream"
 assert _src.count(_B_old) == 1, "PATCH B needle not found — TRTEdge source changed upstream"
 assert _src.count(_C_old) == 1, "PATCH C needle not found — TRTEdge source changed upstream"
 open(QP, "w").write(
     _src.replace(_A_old, _A_new).replace(_B_old, _B_new).replace(_C_old, _C_new)
-        )
+       .replace(_D_old, _D_new))
 subprocess.run(f"python -m py_compile {QP}", shell=True, check=True)
-print("[edge-patch] A(device_map) + B(to-dtype) + C(cpu-export) applied OK（本次不含 D）", flush=True)
+print("[edge-patch] A(device_map) + B(to-dtype) + C(cpu-export) + D(calib batch=1) applied OK", flush=True)
 
 # ---------------------------------------------------------------------------
 # PATCH E：在 quantize 流程里追加"量化 model.visual"（PyTorch 侧，绕开 ORT 跑不了插件的问题）
