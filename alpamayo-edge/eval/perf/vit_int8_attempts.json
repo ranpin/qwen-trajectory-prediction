@@ -54,5 +54,18 @@
   "B. 与 lm_head v9 做**逐项 diff**：v9 用同样的 max_memory 12/12 成功，本次失败 ⇒ 差异只可能来自 PATCH E 的注入或 RUNS 结构。逐项排除，而不是继续调 max_memory。",
   "C. 若 A/B 都指向 PyTorch 侧量化与该加载路径不兼容，则出路① 判死，评估出路③（给 ORT 写 ViTAttentionPlugin）的代价并如实写成结论。"
  ],
- "口径": "以上收益数字（约减半、算力翻倍）全部是**解析预测**，尚无任何实测。不得写成已达成。"
+ "口径": "以上收益数字（约减半、算力翻倍）全部是**解析预测**，尚无任何实测。不得写成已达成。",
+ "v5_之后的本地_diff_结论": {
+  "做法": "用 ast 提取两个脚本的补丁字面量逐项比对（本地，零成本）",
+  "结果": "_A_old/_A_new/_B_old/_B_new/_C_old/_C_new/_D_old 与成功的 lm_head v9 **逐项完全一致**；只有 _D_new 的注释文字不同（无功能差异）。EDGE_LOAD_KW 机制也在 _A_new 里。",
+  "推论": "**脚本侧不存在差异** ⇒ v9 成功 / 本次同配置失败的原因只能来自环境。",
+  "最可能的原因_未验证": "依赖未 pin。OOM 堆栈落在 **transformers/modeling_utils.py:3701** 的 .to() 上，而云端脚本用的是 `pip install -U 'transformers>=4.51'`（未 pin 版本）+ TRTEdge `git clone --depth 1`（未 pin commit）。lm_head v9 与本次相隔一天，期间 transformers 或 Kaggle 基础镜像升级都会改变 device_map 加载路径的行为。这正是 PROBLEMS G1 记过的那类可复现性缺口（当时是上游源码漂移打断字符串补丁，这次可能是依赖漂移改变内存行为）。",
+  "旁证": "v5 的 OOM **未被 PATCH B 的 try/except 捕获** ⇒ 它来自 PATCH B 之外的另一处 .to() 调用，与'加载路径变了'一致。",
+  "下一步_明确且低成本": [
+   "1. 在云端脚本里**pin 依赖**：记录并固定 transformers 版本（先加一行打印 transformers.__version__ 与 TRTEdge commit，两次 run 对照），再 pin 到 v9 那天的版本重试。这是把'环境漂移'从猜测变成证据的最小动作。",
+   "2. 若 pin 回旧版即通过 ⇒ 结论是依赖漂移，出路① 可行，同时给项目补一条'云端脚本必须 pin transformers 与 TRTEdge commit'的硬要求。",
+   "3. 若 pin 回旧版仍 OOM ⇒ 差异在 PATCH E 的注入本身，再定位那次 .to()。"
+  ]
+ },
+ "当前状态": "出路① **既未证通也未证死**（5 次尝试全部卡在管道）。所有收益数字（引擎约减半、算力上限翻倍）均为**解析预测、尚无实测**，不得写成已达成。"
 }
