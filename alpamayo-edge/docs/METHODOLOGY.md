@@ -195,12 +195,24 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 
 | 路线 | 工具支持 | 证据强度 | 说明 |
 |---|---|---|---|
-| **视觉编码器 INT8** | `--visual_quantization` 只给 fp8 | ⚠️ **未证死** | 判据只覆盖"按工具设计的用法"。实查构建链：`visualBuilder.cpp` 用**通用 ONNX parser**，`builderUtils.cpp:257` 的 `createBuilderConfig` **只设 `kMONITOR_MEMORY`、无任何精度 flag** ⇒ **精度由 ONNX 决定**。故"自己给视觉 ONNX 插 QDQ（ModelOpt 的 ONNX PTQ，与该开关是不同代码路）+ TRT 显式量化"是一条未测路线；sm_87 的 INT8 张量核原生（85 TOPS 稠密 = FP16 的 2 倍）。**价值最高**：§1.7 测得 ViT 占 TTFT 19–25%，而 §1.10 的延迟预算显示真实分辨率下升到 **29–33%**，且 §1.4 已证权重量化对 prefill 无效 ⇒ 这是唯一一处量化还能打到主要成本的地方。 |
+| **视觉编码器 INT8** | `--visual_quantization` 只给 fp8 | ⚠️ **未证死** | 判据只覆盖"按工具设计的用法"。实查构建链：`visualBuilder.cpp` 用**通用 ONNX parser**，`builderUtils.cpp:257` 的 `createBuilderConfig` **只设 `kMONITOR_MEMORY`、无任何精度 flag** ⇒ **精度由 ONNX 决定**。故"自己给视觉 ONNX 插 QDQ（ModelOpt 的 ONNX PTQ，与该开关是不同代码路）+ TRT 显式量化"是一条未测路线；sm_87 的 INT8 张量核原生（85 TOPS 稠密 = FP16 的 2 倍）。**价值最高**：§1.7 测得 ViT 占 TTFT 19–25%，而 §1.10 的延迟预算显示真实分辨率下升到 **29–33%**，且 §1.4 已证权重量化对 prefill 无效 ⇒ 这是唯一一处量化还能打到主要成本的地方。**2026-07-28 侦察结果：TRTEdge 侧未发现阻塞**（详见下方）。 |
 | **vocab reduction** | `tensorrt_edgellm/vocab_reduction/` **原生模块** | ✅ 完全未探 | lm_head 是 4096×**151936**；即便量化成 INT4 仍占 3.93 GB 预算的 0.32 GB，词嵌入表另有 1.245 GB。词表砍到 32k 即 4.7×。对"只答一个字母"这类定格式任务语义安全。此前的分析里**一次都没提到过**。 |
 | **投机解码** | `llm_build --specDraft / --specBase`（EAGLE3 / MTP / DFlash） | ⚠️ 部分排除 | 它**不减每 token 字节**，而是让一次权重搬运产出多个 token ⇒ **直接绕开"decode 已达带宽上限"这个框架**。手上正好有已量化的 2B 可作 draft、8B 作 base。但 `config.py:1111` 明写 "MTP config parsing is only supported for Qwen3.5 checkpoints" 而我们是 `qwen3_vl` ⇒ **MTP 出局**；EAGLE3 / DFlash 对 `qwen3_vl` 是否支持**未核实**。 |
 | KV cache 量化 | 只给 fp8 | ⚠️ 较强但非证死 | 同为"开关不可用"。但 KV cache 是运行时 buffer、不是 ONNX 图的一部分，所以上面那条 QDQ 绕路**不适用** ⇒ 比视觉编码器站得住，仍不等于"已证不可行"。 |
 | **W4A8** | 全仓库 grep 无命中 | ✅ **已证死** | 不是开关问题，是实现不存在 ⇒ 需换框架。 |
 | **手写 kernel** | — | ✅ **已证死** | §1.6 实测 TRT 已达可达带宽 97.1%，lm_head 量化后更达 100%。 |
+
+#### 3.6.1 视觉编码器 INT8 —— 侦察结果（2026-07-28，按"最可能致命者优先"）
+
+| # | 检查项 | 结果 |
+|---|---|---|
+| 1 | **构建器是否锁死精度** | ❌ 无阻塞。`builderUtils.cpp` 的 `createBuilderConfig` 全文只做两件事：`setFlag(kMONITOR_MEMORY)`、`setPreviewFeature(kALIASED_PLUGIN_IO_10_03)`。**连 `kFP16` 都没设** —— 推论：现有视觉引擎之所以是 fp16，是因为**ONNX 权重本身是 fp16**，即**精度确实由 ONNX 决定**。这同时正面印证了 QDQ 路线的前提。 |
+| 2 | **运行时是否假定 fp16 IO** | ⚠️ 是，但**不构成阻塞**。`qwenViTRunner.cpp` 把 `mVitInput`(:215) 与 `mOutputEmbedding`(:261) 都分配为 `DataType::kHALF`。这正是 TRT 显式量化的标准形态：**网络 IO 保持 fp16、内部层跑 INT8**（输入后紧跟 Q、输出前 DQ）。只要导出的 ONNX 保持 fp16 的输入输出，运行时无需改动。 |
+| 3 | 量化工具链能否产出该 ONNX | ❓ **未验证 —— 唯一剩下的未知**。需要 ModelOpt 对 27 层 `qwen3_vl_vision` 做 **ONNX PTQ**（而非 LLM 那条 `--visual_quantization` 路），产出 IO 为 fp16、内部带 QDQ 的 `model.onnx`。需一次云端 run。 |
+
+⇒ **结论：阻塞点不在 TRTEdge，而在量化工具链能否产出带 QDQ 的视觉 ONNX。**
+前两层都查过且都没堵，所以这条路**值得投一次云端 run**，而不是像我此前那样直接标"不可行"。
+若 TRT 拒绝无 `kINT8` flag 的显式量化，那也只是 `builderUtils.cpp` 加一行的事（我们自己编译 TRTEdge）。
 
 **教训**：我把"按工具设计的用法走不通"写成了"不可行"，而这正是本项目方法论里那条
 "把未来工作降解为已证死路"的**误用**——那条的前提是**真的证死**。
