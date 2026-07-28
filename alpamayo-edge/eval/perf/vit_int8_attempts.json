@@ -1,0 +1,58 @@
+{
+ "goal": "把视觉编码器（qwen3_vl_vision, 27 层）量化到 INT8。ViT 占 TTFT 19-25%（448px）/ 29-33%（真实分辨率），且 §1.4 已证权重量化对 prefill 无效 ⇒ 这是唯一一处量化还能打到主要成本的地方。",
+ "recon_已完成_且有效": {
+  "原判据被推翻": "我曾以 `--visual_quantization` choices=['fp8'] 且 sm_87 不支持 fp8 为据判'不可行'。实查 builderUtils.cpp:257 的 createBuilderConfig **只设 kMONITOR_MEMORY，连 kFP16 都没设** ⇒ 精度由 ONNX 决定（现有引擎是 fp16 只因 ONNX 权重是 fp16）。判据不成立。",
+  "真正的阻塞": "视觉 model.onnx 的 opset_import 含自定义域 trt_edgellm，图里有 27 个 ViTAttentionPlugin。ModelOpt 的 ONNX PTQ 要靠 ORT 跑图采激活范围，ORT 无此算子 ⇒ ONNX 侧校准不可行，必须走 PyTorch 侧（出路①）。",
+  "视觉ONNX签名_本地零成本获得": {
+   "inputs": {
+    "input": "FLOAT16 [total_tokens,1536] (=3ch×16×16×temporal_patch2)",
+    "rotary_pos_emb": "FLOAT [total_tokens,36]",
+    "cu_seqlens": "INT32 [batch_p1]",
+    "max_seqlen_carrier": "INT32 [max_seqlen]",
+    "fast_pos_embed_idx": "INT64 [4,total_tokens]",
+    "fast_pos_embed_weight": "FLOAT16 [4,total_tokens]"
+   },
+   "outputs": "output + deepstack_features_0/1/2, 全 FLOAT16 [total_tokens//4, 4096]（//4 = 2×2 spatial merge、3 路 DeepStack，与结构图对上）"
+  },
+  "收益量化": "116 个 Gemm，权重 (3456,1152)×27 / (1152,1152)×27 / (4304,1152)×27 / (1152,4304)×27 + Merger (4608,4608)×4、(4096,4608)×4 = 571.5 M 参数 = 1090 MiB，而整个视觉引擎 1.10 GiB ⇒ Gemm 几乎就是引擎全部。INT8 后引擎约减半、算力上限翻倍（sm_87 INT8 85 vs FP16 43 TOPS）。"
+ },
+ "失败谱系_出路①_共5次_全部卡在管道_未触及结构性问题": [
+  {
+   "run": "recon",
+   "失败": "CUDA OOM",
+   "根因": "新写脚本忘带 PATCH A/B/C（8B 单卡装不下）⇒ 重踩 PROBLEMS A1（本项目第一个问题）。且该问题本不必上云：视觉 ONNX 早在本地 tarball 里。"
+  },
+  {
+   "run": "v1",
+   "失败": "PATCH E needle not found",
+   "根因": "PATCH C 是**插入**那行的，而头部 open(QP,'w').write(...) 只写文件、`_src` 变量仍是原始未打补丁源码 ⇒ E 必然找不到。"
+  },
+  {
+   "run": "v2",
+   "失败": "PATCH E needle not found",
+   "根因": "**字符串补丁是子串匹配、不是行匹配**：PATCH A 插入的 20 空格缩进行里也含'4 空格 + 同样文本' ⇒ 打完补丁后 count==2，断言正确拒绝。"
+  },
+  {
+   "run": "v3",
+   "失败": "CUDA OOM (32.00 MiB，GPU0 剩 **4.81 MiB**)",
+   "根因": "发生在**加载/.to() 阶段**，modeling_utils.py:3701。我当时归因为'去掉 PATCH D ⇒ 校准 batch 回到 16'。"
+  },
+  {
+   "run": "v4",
+   "失败": "= v3",
+   "根因": "**我自己制造的**：给脚本加 D 的编辑在第二处断言失败 ⇒ 异常在写文件前抛出 ⇒ 脚本根本没改，而我把**未修改的脚本**推了上去。教训：确认的是'命令跑过了'而不是'目标状态达成了'。v5 的推送脚本已加硬校验。"
+  },
+  {
+   "run": "v5",
+   "失败": "CUDA OOM (32.00 MiB，GPU0 剩 **4.81 MiB**)",
+   "根因": "加回 PATCH D（batch=1）后**剩余显存与 v3 字节级相同** ⇒ **我对 v3 的归因是错的**：校准 batch 不控制这一步，OOM 在加载/.to() 阶段、校准之前。这与 G3 里 v3/v5 '完全相同的剩余显存 ⇒ 该旋钮没约束到这一步' 是同一个证据模式，我又犯了一次。"
+  }
+ ],
+ "尚未回答的结构性问题": "QDQ 能否活过 TRTEdge 的视觉导出包装器（QDQ_SURVIVED_EXPORT / QDQ_STRIPPED_BY_EXPORT）。5 次尝试都没跑到导出，所以出路① **既未证通也未证死**。",
+ "下一步的候选_按证据而非猜测": [
+  "A. 先定位 OOM 的确切调用点：把 modeling_utils.py:3701 附近那次 .to() 找出来，看它是不是 PATCH B 之外的另一处（v5 的 OOM 未被 PATCH B 的 try/except 捕获 ⇒ 是**另一个** .to() 调用）。这是本地读源码就能做的事，不需要云端。",
+  "B. 与 lm_head v9 做**逐项 diff**：v9 用同样的 max_memory 12/12 成功，本次失败 ⇒ 差异只可能来自 PATCH E 的注入或 RUNS 结构。逐项排除，而不是继续调 max_memory。",
+  "C. 若 A/B 都指向 PyTorch 侧量化与该加载路径不兼容，则出路① 判死，评估出路③（给 ORT 写 ViTAttentionPlugin）的代价并如实写成结论。"
+ ],
+ "口径": "以上收益数字（约减半、算力翻倍）全部是**解析预测**，尚无任何实测。不得写成已达成。"
+}
