@@ -9,6 +9,10 @@
 用法：改下面的 kernelSlug / OUT 后 `.venv/bin/python cloud/pull_kernel_output.py`，
       结束后**务必**用退出码校验：`tar tzf <file> >/dev/null && echo OK`（别用管道，会吞退出码）。
 """
+import json, os, sys, time
+
+import requests
+
 C=json.load(open(os.path.expanduser("~/.kaggle/kaggle.json")))
 AUTH=(C["username"], C["key"])
 OUT="/Users/ranpin/projects/qwen-trajectory-prediction/alpamayo-edge/outputs/edge_artifacts_lmhead.tgz"
