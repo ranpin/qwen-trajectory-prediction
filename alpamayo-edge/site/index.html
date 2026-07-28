@@ -246,6 +246,32 @@ footer a{color:var(--accent)}
     <tr><td>A + B 叠加</td><td>B 已被推翻 ⇒ 实际可期的就是 A</td><td>−19%</td><td class="win">≈26.8 ms（<strong>+23%</strong>，来自 A）</td><td>—</td></tr>
   </table>
 
+  <div class="callout ok">
+    <div class="t">优化 A 收官：lm_head 也量化为 INT4 —— 第 9 次尝试成功，+19.6% 已实测（2026-07-28）</div>
+    §1.5 发现 lm_head 未被量化、独占 decode 字节 25.6% 后，这条优化<strong>失败了 8 次</strong>（见 PROBLEMS G3）。
+    第 9 次靠把报错数字做因式分解才找到真正的自变量：<code>4.64 GiB = 校准batch 16 × seq 512 × vocab 151936 × 4B</code>
+    ⇒ 瓶颈是校准批次的 <strong>logits</strong> 张量，与权重大小、模块放置<strong>都无关</strong>（所以"换成 2B"当时也失败）。
+    把 AWQ 校准 batch 降到 1 后，2B 与 8B 一次全过。<br><br>
+    <table style="margin:0">
+      <thead><tr><th>引擎</th><th>decode TPOT</th><th>提速</th><th>引擎大小</th><th>n=210 正确率</th><th>vs 各自基线</th></tr></thead>
+      <tbody>
+        <tr><td>INT4 8B（已部署）</td><td>30.73 ms</td><td>—</td><td>4.847 GB</td><td>73.8%</td><td>—</td></tr>
+        <tr><td><strong>INT4 8B + lm_head INT4</strong></td><td><strong>25.69 ms</strong></td><td><strong>+19.6%</strong></td><td><strong>3.923 GB</strong></td><td>72.4%</td><td><strong>−1.4 pts</strong>（p=0.169）</td></tr>
+        <tr><td>INT4 2B</td><td>13.41 ms</td><td>—</td><td>1.364 GB</td><td>65.2%</td><td>—</td></tr>
+        <tr><td><strong>INT4 2B + lm_head INT4</strong></td><td><strong>7.41 ms</strong></td><td><strong>+81%</strong></td><td><strong>0.903 GB</strong></td><td>65.7%</td><td>+0.5 pts（噪声内）</td></tr>
+      </tbody>
+    </table><br>
+    <strong>预测对账</strong>：事前写下 8B <strong>+19%</strong>，实测 <strong>+19.6%</strong>；引擎字节解析预测 3.932 GB vs 实测 3.923 GB，<strong>误差 −0.23%</strong>（2B 为 +0.89%）。
+    再次验证"静态量可精确预测、动态量只能给上界"：8B 实现了字节比上界 1.234× 的 <strong>84%</strong>；
+    而 <strong>2B 反而超出上界</strong>（1.809× vs 上界 1.514×）—— 因为带宽效率同时从可达上限的 66% 升到 79%，
+    去掉那个 M=1 却跑在 64 行 tile 上的 fp16 lm_head GEMM（占 2B decode 字节 46%）改善了访存形态（机制为推断）。<br>
+    <strong>量化侧到此穷尽</strong>：8B decode 的有效带宽 153.1 GB/s ≈ 实测可达上限 152.3 ⇒ 路径已完全饱和，
+    再提速只能继续减字节，而 KV cache 量化在 sm_87 不可用（§2.3）。<br>
+    <strong>但不是免费的</strong>：8B 付了 −1.4 pts，且损失集中在更难的 robofail（59.0 → 55.0）；2B 则没付代价。
+    <strong>⚠️ 归因有 confound</strong>：本次同时改了两件事（lm_head 量化 + 校准 batch 16→1），
+    所以 −1.4 pts <strong>不能单独归因于 lm_head 量化</strong>；要隔离需再做一次"lm_head 保持 fp16 + batch=1"的对照，<strong>未做</strong>。
+  </div>
+
   <h3>1.6 手写 kernel 对照：先量"上限"，再决定要不要优化</h3>
   <p>1.5 节给出的 B 项优化（手写 GEMV 把带宽效率从 72.2% 提上去）听起来诱人。但在动手写之前必须先回答一个问题：<strong>这台机器的 DRAM 到底能给多少带宽？</strong>「占理论峰值 72%」只有在硬件真能跑到 100% 时才意味着有 28% 可捞。于是先用自己写的纯流式读 kernel（1 GB、128-bit load）实测可达上限，再写三个版本的 W4A16 GEMV 与 TRT 对照。</p>
   <figure><img src="figures/gemv_kernel_bench.png" alt="hand-written W4A16 GEMV vs TensorRT"><figcaption><b>图 14 · 手写 W4A16 GEMV 与 TRT 及真实带宽上限对照</b><br><b>横轴</b>：四种真实投影形状（K×N，取自 Cosmos-Reason2-8B 的 q/k/v/o 与 gate/up/down）<br><b>竖轴</b>：实测有效带宽 (GB/s)；点线=理论峰值 204.8、<span style="color:#16a34a">绿实线=实测可达读带宽 152.3</span>、<span style="color:var(--err)">红虚线=TRT 的 147.9</span><br><b>结果</b>：<strong>这台 Orin 的实测可达读带宽只有 152.3 GB/s（理论峰值的 74.4%）</strong>，两次运行 151.7 / 152.3（差 0.4%），并与 NVIDIA 论坛社区实测的 151.7 GB/s D2D 独立吻合。<strong>据此 TRT 的 GEMV 达到可达带宽的 97.1%</strong>。我最好的手写版本（v4：x 进 shared memory + half2 融合乘加）只有 79.2 GB/s = 可达的 52.0%，<strong>比 TRT 慢 1.87×</strong><br><b>分析</b>：① <strong>我上一节的 B 项优化被自己的测量推翻</strong>——正确的分母是可达带宽而非理论峰值，TRT 的 GEMV 只剩 <strong>3.0% 余量，端到端约 +2%</strong>，手写 kernel 这条路基本不通。② 版本间的教训很典型：v2/v3 单纯把 32-bit load 换成 128-bit 反而<strong>更慢</strong>，因为真正的瓶颈不是 DRAM 而是<strong>逐元素重复读 x + 标量 int→fp16 转换</strong>；v4 把 x 放进 shared memory（一个 block 内 8 个 warp 复用）并改用 half2 后才提升 1.4–4×。③ 要再补上与 TRT 的 1.87× 差距，还需 AWQ/FasterTransformer 的 <code>lop3</code> 位技巧（直接拼出 fp16 尾数、免掉转换指令）+ 权重离线置换——而 TRT 已经做了这些。④ <strong>真正的结论：decode 的优化杠杆不在 kernel，而在字节数</strong>（即 A 项：量化 lm_head）。</figcaption></figure>
