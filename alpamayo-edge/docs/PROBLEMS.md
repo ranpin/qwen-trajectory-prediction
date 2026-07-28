@@ -85,6 +85,28 @@
 - **解决**：用 API 取签名 URL，`curl -L --http1.1 -C -` **流式+断点续传**（服务器还会 HTTP/2 断流，故 `--http1.1` + 循环重试直到 `tar tzf` 校验通过）。
 - **教训**：大文件别用会全量读内存的下载器；流式+可续传+完整性校验。
 
+#### E1 续（2026-07-28，拉 6.46 GiB 的 lm_head 产物时同一个坑又踩了两次）
+
+1. **kaggle CLI 至今未修**：`kaggle kernels output` 拉 6.46 GiB 的 `edge_artifacts_lmhead.tgz`
+   产出 **0 字节文件、退出码 0** —— 静默失败，比报错更坏。
+2. **`curl -C -` 配"每次重取的签名 URL"会静默损坏文件**：kaggleusercontent 的签名 URL 短时效，
+   我写的重试循环每轮重取新 URL 再 `-C -` 续传。结果文件长到 **8.29 GB**（真实归档只有 6.46 GiB），
+   多出的 1.3 GB 是从头重下后追加/错位写入的内容，`zlib` 解压报 `invalid block type`。
+   ⇒ **`-C -` 只在"同一个稳定 URL + 服务端确实按 Range 响应"时才安全**；换 URL 续传等于赌运气。
+3. **正确做法（本轮最终采用）**：先用 `Range: bytes=0-0` 探测——返回 `206` 且
+   `Content-Range: bytes 0-0/6938379933` 就同时拿到了**总长度**与**Range 可用性**
+   （注意 kaggleusercontent **不支持 HEAD**，`Content-Length` 取不到）。
+   然后**按显式字节区间分段拉**（每段 400 MB，**每段单独重取一个新签名 URL**），
+   顺序追加；若某段返回 200（服务端忽略 Range）就立刻中止而不是继续写。全程零额外磁盘。
+
+**我自己犯的一个观察错误，值得单独记**：中途我用
+`tar tzf x.tgz > manifest.txt && echo "TAR OK"` 校验，看到 25 条目名就宣布"完整性 OK"——
+但 **`echo` 那行根本没打印**（tar 返回非零），我把 `grep` 的输出错当成了校验通过，
+并据此把一个**还在被写入**的文件 `mv` 进了归档目录、算了 SHA256。
+⇒ **教训：校验必须看退出码/成功标记本身，不能看"有输出"**；
+`cmd | head` / `cmd | wc -l` 会把退出码吞掉（返回的是管道最后一个命令的状态），别用它们做校验。
+**还有：正在下载的文件不要移动**——`mv` 之后下载进程会按原路径重建，既污染归档又白耗带宽。
+
 ### E2. 基准仓库结构非 parquet
 - **现象**：按 datasets-server 显示的 parquet 列去读，`No objects to concatenate`。
 - **根因**：datasets-server 的 parquet 是自动转换的；**真实仓库是 `*_qa_pairs.json`（标注）+ `clips.tar.gz`（视频，需解包）**。
