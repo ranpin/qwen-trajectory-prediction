@@ -220,7 +220,7 @@ arrow([(RX + 9.0, 31.4), (RX + 9.0, 29.6)])
 box(RX, 3.2, RW, 18.6,
     "与上游结构的三处差异（都是部署造成的）\n\n"
     "① 36×7 个线性层被量化：INT4(W4A16) / INT8(W8A8)；\n"
-    "　 视觉编码器与 lm_head 未量化，仍是 fp16\n"
+    "　 视觉编码器仍是 fp16；lm_head 默认 fp16，可选 INT4（已实测 +19.6%）\n"
     "② 词嵌入查表被搬出 TRT 图 → 独立权重文件 + 一个 kernel，\n"
     "　 这样才能把视觉向量插进同一个 buffer（上游在 PyTorch\n"
     "　 里就是 index_select + masked_scatter 两句）\n"

@@ -102,7 +102,7 @@ band(77.2, "②",
      "量化之后任务正确率掉多少？\n掉的是不是统计显著的？",
      "§1.2 官方带标注基准 · §1.3 探针",
      "Cosmos-Reason1-Benchmark n=210 选\n择题，三精度同帧；另 12 条 prompt",
-     "无显著损失（可以放心用 INT4）",
+     "在 6.7 pts 分辨率内未发现损失（MDE 见 §1.2）",
      "76.2 / 75.2 / 73.8%（FP16 / INT8 / INT4），\n"
      "McNemar p > 0.4、Wilson 95% CI 全部重叠。",
      OK_F, OK_E)
@@ -151,12 +151,13 @@ ax.annotate("", xy=(QX - 0.15, 37.9), xytext=(FKX, 37.9),
 
 band(34.0, "⑤B",
      "路线 A：把 lm_head 也量化\n掉，省掉 19% 的字节？",
-     "§1.8 末　云端 5 次量化尝试",
-     "T4×2 上按 5 组不同的显存/放置配置\n重试，并打印实际设备分布自证",
-     "没做成 —— 记为未验证的预测，而非悄悄消失",
-     "显存两面夹击：留在 GPU 则临时张量 OOM，放到 CPU 则\n"
-     "AWQ 校准非法访存。预测 +23% 待验证，出路 = 单卡 ≥24 GB。",
-     NO_F, NO_E)
+     "§1.5 框　云端 9 次尝试，第 9 次成",
+     "前 8 次调显存/模块放置全失败；第 9 次\n"
+     "把报错数字因式分解，只改校准 batch 16→1",
+     "成了：decode +19.6%（事前预测 +19%），代价正确率 −1.4 pts",
+     "瓶颈是校准批次的 logits 张量 = batch×seq×vocab×4B，与权重\n"
+     "大小无关。8B 有效带宽升至 153.1 ≈ 可达上限 152.3 GB/s ⇒ 饱和。",
+     OK_F, OK_E)
 
 link(31.6, "以上性能全部只测了 LLM —— 可它是个 VLM，真实请求还带着图像。")
 
@@ -166,7 +167,7 @@ band(23.2, "⑥",
      "llm_inference --dumpProfile 取 TRT 分\n段 GPU 时间，拟合并外推 8 路相机",
      "被忽略的四分之一，外加一道硬墙",
      "视觉编码器 = 4.5 + 23.2 ms×帧（R²=0.997），占 TTFT 19–25%；\n"
-     "maxInputLen=1024 ⇒ 最多 8 帧；它仍是 fp16 且本地无法量化。",
+     "帧数上限随帧形状变（112 vs 154 tok/帧）；已重建 maxInputLen=4096。",
      OK_F, OK_E)
 
 link(20.8, "精度这条轴已经调到头了 —— 那换一个更小的模型，是不是更划算？")
@@ -187,8 +188,7 @@ ax.annotate("", xy=(QX + 5.0, 8.4), xytext=(QX + 5.0, 11.0),
 panel(QX, 0.6, 96.9, 7.6,
       "① 交互式 / 长输出选 INT4（vs FP16：decode 2.66×、能效 3.1×）；批量 / 长 prompt 选 INT8"
       "（vs FP16：prefill 1.87×、能效 2.1×）；② 32 GB 机上 FP16 不可行 ⇒ 量化是可部署性的前提；\n"
-      "③ 还没兑现的收益按大小排队：量化 lm_head（−19% 字节，预测 +23%）→ 量化视觉编码器"
-      "（占 TTFT 1/4）→ W4A8（激活也量化，才能让 prefill 也快）；kernel 手写已排除。",
+      "③ lm_head 量化已兑现（+19.6%，代价 −1.4 pts）⇒ 8B decode 已达可达带宽上限，**量化侧穷尽**：视觉编码器与 KV cache 只有 fp8（sm_87 不支持）、W4A8 工具里不存在、手写 kernel 已由实测排除。",
       "#f8fafc", "#94a3b8",
       head="⇒ 以上各轮实验合起来给出的部署决策（§三 思考讨论）", hcol=INK)
 
@@ -197,10 +197,8 @@ handles = [
            label="结论已被实测确认"),
     Line2D([], [], marker="s", ls="", ms=7, mfc=NEG_F, mec=NEG_E,
            label="负结果：余量被证明不存在（含推翻自己的预测）"),
-    Line2D([], [], marker="s", ls="", ms=7, mfc=NO_F, mec=NO_E,
-           label="尝试过但没做成：留作未验证的预测"),
 ]
-fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False,
+fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False,
            bbox_to_anchor=(0.5, -0.004))
 fig.suptitle("Experiment chain: each round's conclusion is the next round's "
              "question", y=0.996, fontsize=TITLE)
