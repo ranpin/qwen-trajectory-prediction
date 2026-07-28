@@ -208,7 +208,36 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 |---|---|---|
 | 1 | **构建器是否锁死精度** | ❌ 无阻塞。`builderUtils.cpp` 的 `createBuilderConfig` 全文只做两件事：`setFlag(kMONITOR_MEMORY)`、`setPreviewFeature(kALIASED_PLUGIN_IO_10_03)`。**连 `kFP16` 都没设** —— 推论：现有视觉引擎之所以是 fp16，是因为**ONNX 权重本身是 fp16**，即**精度确实由 ONNX 决定**。这同时正面印证了 QDQ 路线的前提。 |
 | 2 | **运行时是否假定 fp16 IO** | ⚠️ 是，但**不构成阻塞**。`qwenViTRunner.cpp` 把 `mVitInput`(:215) 与 `mOutputEmbedding`(:261) 都分配为 `DataType::kHALF`。这正是 TRT 显式量化的标准形态：**网络 IO 保持 fp16、内部层跑 INT8**（输入后紧跟 Q、输出前 DQ）。只要导出的 ONNX 保持 fp16 的输入输出，运行时无需改动。 |
-| 3 | 量化工具链能否产出该 ONNX | ❓ **未验证 —— 唯一剩下的未知**。需要 ModelOpt 对 27 层 `qwen3_vl_vision` 做 **ONNX PTQ**（而非 LLM 那条 `--visual_quantization` 路），产出 IO 为 fp16、内部带 QDQ 的 `model.onnx`。需一次云端 run。 |
+| 3 | ModelOpt 的 ONNX 量化 API 是否存在 | ✅ 存在。云端实测 `modelopt 0.45.0` 的 `modelopt.onnx.quantization` 导出 `quantize / int8 / int4 / fp8 / qdq_utils / calib_utils` 等。 |
+| 4 | **视觉 ONNX 的图里有什么** | ⚠️ **找到真正的阻塞点**。本地直接读 `visual/model.onnx`（图仅 2.3 MB，权重在 `model.onnx.data` 1.157 GB）：`opset_import` 含**自定义域 `trt_edgellm`**，且图中有 **27 个 `ViTAttentionPlugin` 节点**（每层一个，即 FMHA 插件）。而 ModelOpt 的 ONNX PTQ 要靠 **ONNX Runtime 跑图**来采激活范围，**ORT 没有这个自定义算子的实现** ⇒ 激活校准无法开箱运行。 |
+
+**视觉 ONNX 的真实签名（本地实测，免费得到，此前不知道）**：
+
+| | 名称 | dtype | 形状 |
+|---|---|---|---|
+| 输入 | `input` | FLOAT16 | `[total_tokens, 1536]`（1536 = 3ch × 16×16 patch × temporal_patch 2 ✓） |
+| | `rotary_pos_emb` | FLOAT | `[total_tokens, 36]` |
+| | `cu_seqlens` / `max_seqlen_carrier` | INT32 | 变长序列边界 |
+| | `fast_pos_embed_idx` / `_weight` | INT64 / FLOAT16 | `[4, total_tokens]` |
+| 输出 | `output` + `deepstack_features_0/1/2` | FLOAT16 | `[total_tokens//4, 4096]`（`//4` = 2×2 spatial merge ✓，3 路 DeepStack ✓） |
+
+**可量化规模（实测）**：116 个 `Gemm`，权重形状 (3456,1152)×27 / (1152,1152)×27 / (4304,1152)×27 /
+(1152,4304)×27 + Merger 的 (4608,4608)×4、(4096,4608)×4，合计 **571.5 M 参数 = 1090 MiB**，
+而整个视觉引擎是 1.10 GiB ⇒ **Gemm 权重几乎就是引擎全部**。INT8 后引擎约减半、算力上限翻倍
+（sm_87 INT8 85 TOPS vs FP16 43）。**所以这条路的收益是真的，只是入口被插件堵住。**
+
+⇒ **修正后的结论：阻塞点是「视觉 ONNX 含 27 个 TRTEdge 自定义算子，ORT 跑不了 ⇒ 激活校准无法开箱进行」。**
+三条候选出路，按代价排序：
+1. **在 PyTorch 侧量化**：用 `modelopt.torch.quantization` 量化 HF 的 `model.visual`（纯 PyTorch、无自定义算子），
+   再走 TRTEdge 导出 —— 风险是 QDQ 能否活过它的导出包装器。**最值得先试。**
+2. **权重-only INT8**（无需校准、绕开 ORT）：能把引擎减半，但 ViT 在 prefill 侧是**计算受限**，
+   权重-only 下 TRT 会反量化回 fp16 再算 ⇒ **延迟几乎无收益**，只省显存。（与 §1.4 对 W4A16 的结论同源。）
+3. 给 ORT 写 `ViTAttentionPlugin` 的实现 —— 工作量最大，最后考虑。
+
+**另一处自己的疏漏**：本次云端 run 的 Q2 失败是 **CUDA OOM**，因为我新写的脚本**没带 PATCH A/B/C**
+（8B 在单张 T4 上装不下）—— 正是 PROBLEMS **A1**，本项目遇到的第一个问题，我写新脚本时重踩了一遍。
+而且这一步**本来就不必上云**：视觉 ONNX 早已在本地的 `edge_artifacts_int4_awq.tgz` 里，
+本地解包 + `onnx.load` 就答完了 Q2/Q4，零成本。**教训：先问"这个问题需要云吗"，再写云端脚本。**
 
 ⇒ **结论：阻塞点不在 TRTEdge，而在量化工具链能否产出带 QDQ 的视觉 ONNX。**
 前两层都查过且都没堵，所以这条路**值得投一次云端 run**，而不是像我此前那样直接标"不可行"。
