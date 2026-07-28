@@ -1,0 +1,31 @@
+{
+ "date": "2026-07-28", "device": "orin-dog, MAXN, batch 1, decode pastKVLen=512, 200 iters",
+ "what": "lm_head 也量化为 INT4（AWQ 校准 batch=1）后的实测，与已部署的 batch=16 / lm_head-fp16 版并列",
+ "8B": {
+  "engine_gb": {"baseline": 4.847, "lmhead_int4": 3.923,
+                "predicted_analytic": 3.932, "prediction_error_pct": -0.23},
+  "tpot_ms": {"baseline": 30.7315, "lmhead_int4": 25.6876},
+  "speedup": 1.1964, "gain_pct": 19.6,
+  "predicted_gain_pct": 19,
+  "byte_ratio_bound": 1.234,
+  "fraction_of_bound_achieved_pct": 84,
+  "prefill512_ms": {"baseline": 301.0981, "lmhead_int4": 295.8568},
+  "effective_bw_gbs": {"baseline": 157.9, "lmhead_int4": 153.1},
+  "verdict": "PREDICTION CONFIRMED — 事前写下 +19%，实测 +19.6%。静态量（引擎字节）预测误差 -0.23%。"
+ },
+ "2B": {
+  "engine_gb": {"baseline": 1.364, "lmhead_int4": 0.903, "predicted_analytic": 0.895,
+                "prediction_error_pct": 0.89},
+  "tpot_ms": {"baseline": 13.41, "lmhead_int4": 7.4127},
+  "speedup": 1.809, "gain_pct": 81,
+  "byte_ratio_bound": 1.514,
+  "exceeds_bound": true,
+  "effective_bw_gbs": {"baseline": 101.0, "lmhead_int4": 120.7},
+  "pct_of_achievable_152_3": {"baseline": 66, "lmhead_int4": 79},
+  "prefill512_ms": {"baseline": 74.9, "lmhead_int4": 72.1925},
+  "verdict": "实测 1.81× **超过** 字节比上界 1.51× —— 因为带宽效率同时从可达上限的 66% 升到 79%。此前发现的'模型越小带宽效率越低'在这里被部分修复：去掉那个 M=1 却跑在 64 行 tile 上的 fp16 lm_head GEMM（占 2B decode 字节 46%），换成 W4A16 GEMV 后访存形态更好。机制为推断。"
+ },
+ "build": {"8b_lmhead": {"exit": 0, "peak_ram_mb": 14831}, "2b_lmhead": {"exit": 0, "peak_ram_mb": 7428}},
+ "IMPORTANT_caveat": "校准 batch 16->1 是口径改动，会影响 AWQ per-channel scale 估计 ⇒ 精度必须另测（n=210），未测完之前不得把这里的提速当作'免费收益'。",
+ "headroom_after": "8B 的有效带宽 153.1 GB/s ≈ 实测可达上限 152.3 GB/s ⇒ decode 路径已完全饱和，再要提速只能继续减字节（KV cache 量化在 sm_87 不可用，见 METHODOLOGY §3.5）。"
+}

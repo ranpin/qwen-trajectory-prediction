@@ -1,0 +1,13 @@
+{
+ "why": "所有已发布的延迟数字都是 10~200 次迭代的突发负载；车上是连续跑的。此前完全没测过连续负载下 TPOT 会不会因降频退化。",
+ "setup": "orin-dog, MAXN, batch=1, engines/int4, decode pastKVLen=512, 每轮 2000 次迭代连续跑 27 轮 = 1862 s，并行 tegrastats 1 s 采样",
+ "tpot_ms": {"min": 30.579, "max": 30.642, "mean": 30.612, "std": 0.0167},
+ "drift": {"first_third_mean": 30.616, "last_third_mean": 30.610, "pct": -0.02,
+           "full_range_ms": 0.063, "full_range_pct_of_mean": 0.21},
+ "thermals": {"gpu_temp_start_C": 44, "gpu_temp_peak_C": 70, "gpu_temp_end_C": 69,
+              "rise_C": 25, "gr3d_util_mean_pct": 90,
+              "vdd_gpu_soc_mean_W": 30.5, "vdd_gpu_soc_peak_W": 34.2},
+ "conclusion": "31 分钟 90% GPU 利用率下**无任何降频**：TPOT 漂移 -0.02%、全程极差 0.21%，温度在 ~70C 稳定。⇒ 突发负载测出的延迟在连续负载下依然成立，这是正面结论。",
+ "bonus": "27 轮 × 2000 迭代给出的 std 是 0.0167 ms，而最初 10 次迭代的 std 是 6.89 ms（均值的 20%）——方差降了约 400 倍，TPOT 的真值就此钉在 30.61 ms，也回证了 200 迭代那次的 30.78 ms（相差 0.5%）。",
+ "artifacts": {"csv": "eval/perf/sustained_30min.csv", "tegrastats": "outputs/archive/sustained_tegrastats.log（gitignored）", "script": "scripts/orin/sustained_load.sh"}
+}

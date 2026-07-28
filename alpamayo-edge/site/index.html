@@ -161,6 +161,16 @@ footer a{color:var(--accent)}
     <li>多模态图像路径（视觉编码器 + deepstack + INT4 LLM）端到端验证正确。</li>
   </ul>
 
+  <div class="callout ok">
+    <div class="t">持续负载复核：31 分钟连续 decode，零降频（2026-07-28 补测）</div>
+    此前所有延迟数字都来自 <strong>10–200 次迭代的突发负载</strong>，而车上是连续跑的——降频会不会把它们推翻，一直没测。
+    现做 <strong>27 轮 × 2000 次迭代 = 1862 s 连续 decode</strong>（orin-dog，MAXN，batch 1，并行 tegrastats 1 s 采样）：<br>
+    <strong>TPOT 30.579–30.642 ms，均值 30.612，std 0.0167 ms</strong>；前 1/3 与后 1/3 相比漂移 <strong>−0.02%</strong>，全程极差仅占均值 <strong>0.21%</strong>。<br>
+    GPU 温度 44 °C → 峰值 70 °C → 收尾 69 °C（升 25 °C 后<strong>稳住</strong>），GR3D 利用率均值 90%，VDD_GPU_SOC 均值 30.5 W / 峰值 34.2 W。<br>
+    ⇒ <strong>突发负载测出的延迟在连续负载下依然成立</strong>，这台机器在 MAXN 下没有热节流余量问题。<br>
+    <span style="font-size:12.5px;color:var(--muted)">附带收益：27×2000 次迭代给出的 std 是 <strong>0.0167 ms</strong>，而最初 10 次迭代的 std 是 <strong>6.89 ms</strong>（均值的 20%）——方差降约 400 倍，TPOT 的真值钉在 <strong>30.61 ms</strong>，也回证了 200 迭代那次的 30.78 ms（差 0.5%）。数据 <code>eval/perf/sustained_30min.json</code>。</span>
+  </div>
+
   <h3>1.2 精度：真实基准任务正确率（vs FP16）</h3>
   <p>在<strong>官方 <a href="https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark" target="_blank" style="color:var(--accent)">Cosmos-Reason1-Benchmark</a>（robovqa 子集，110 道选择题带标准答案）</strong>上实测<strong>任务正确率</strong>——具体场景 + ground truth，效果指标有实际意义。视频按 6 帧（≤448px）采样作多图，FP16/INT8/INT4 用同一批帧，精度损失严格可比。</p>
   <figure><img src="figures/benchmark_accuracy.png" alt="benchmark task accuracy"><figcaption><b>图 10 · 基准任务正确率（Cosmos-Reason1-Benchmark）</b><br><b>横轴</b>：三种精度（FP16 参考 / INT8 / INT4）<br><b>竖轴</b>：多选题任务正确率 %（误差棒=Wilson 95% 置信区间，绿虚线=FP16 76.2%）<br><b>结果</b>：n=210（robovqa 88.2% + 更难的 robofail 63%）FP16 76.2%、INT8 75.2%、INT4 73.8%；三者 <strong>CI 重叠、McNemar p&gt;0.4 → 差异统计不显著</strong><br><b>分析</b>：即使扩到 210、加入更难子集，量化仍<strong>无显著任务正确率损失</strong>，且分辨不出 INT4/INT8。二选一 MC 使 CI 仍 ±5.7；要更细分辨需上千样本或更难多选题（其余子集需外部视频，见边界）</figcaption></figure>
