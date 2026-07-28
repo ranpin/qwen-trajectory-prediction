@@ -43,6 +43,18 @@ except Exception as _se:
 os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", os.environ["HF_TOKEN"])
 
 
+# ---- 版本指纹（必须最先打印）------------------------------------------
+# v9(成功) 与 v5(失败) 的 transformers 版本与 TRTEdge commit **都没被记录**，
+# 导致无法对照 —— 从本 run 起一律先打印，别再让"昨天能跑"变成不可复现。
+def _fingerprint():
+    import importlib
+    for _m in ("torch", "transformers", "modelopt", "accelerate", "onnx"):
+        try:
+            print(f"[ver] {_m} = {importlib.import_module(_m).__version__}", flush=True)
+        except Exception as _e:
+            print(f"[ver] {_m} = <{type(_e).__name__}>", flush=True)
+
+
 def sh(c):
     print("+", c, flush=True)
     return subprocess.run(c, shell=True, check=True)
@@ -55,7 +67,14 @@ def df(tag):
 
 # 1) Fetch + install TRTEdge
 df("start")
-sh("git clone --depth 1 https://github.com/NVIDIA/TensorRT-Edge-LLM.git /kaggle/working/TRTEdge")
+# 2026-07-28: pin 到 **Orin 上正在用的同一个 commit**（METHODOLOGY §0: v0.9.0 @1ac0f2b）。
+# 此前一直是 `clone --depth 1` 未 pin —— G1 已因上游漂移吃过一次，且 v5 的失败
+# 无法与 v9 对照正是因为两次的版本都没被记录（§4.1 那条可复现性缺口在报账）。
+TRTEDGE_PIN = "1ac0f2b"
+sh("git clone -q https://github.com/NVIDIA/TensorRT-Edge-LLM.git /kaggle/working/TRTEdge")
+sh(f"git -C /kaggle/working/TRTEdge checkout -q {TRTEDGE_PIN}")
+sh("git -C /kaggle/working/TRTEdge rev-parse --short HEAD")
+_fingerprint()
 sh("cd /kaggle/working/TRTEdge && pip -q install '.[tools]'")
 
 # 2) Patch quantize.py: (A) multi-GPU load, (B) tolerate .to(dtype), (C) CPU-consolidate
@@ -256,7 +275,9 @@ MODEL = "nvidia/Cosmos-Reason2-8B"
 SCRATCH = "/tmp/edge"
 ART = f"{SCRATCH}/artifacts"
 os.makedirs(ART, exist_ok=True)
-os.environ["EDGE_LOAD_KW"] = '{"device_map": "auto", "max_memory": {"0": "12GiB", "1": "12GiB"}}'
+# v3/v5 都在 GPU0 上 OOM（剩 4.81 MiB，两次字节级相同 ⇒ 与校准 batch 无关）。
+# 改为非对称并给 GPU0 留头寸：10+13 = 23 GiB > 模型 16.34 GiB ⇒ 不会像 G3 v6 那样外溢。
+os.environ["EDGE_LOAD_KW"] = '{"device_map": "auto", "max_memory": {"0": "10GiB", "1": "13GiB"}}'
 os.environ.setdefault("EDGE_VIT_CALIB", "random")
 
 ok = False
