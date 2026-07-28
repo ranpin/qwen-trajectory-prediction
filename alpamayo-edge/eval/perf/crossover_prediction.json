@@ -150,5 +150,20 @@
   "contrast": "8B's earlier v3/v5 OOM asked for 1.16 GiB = 4096 x 151936 x 2 B, i.e. the lm_head WEIGHT -- a different tensor. Both are fatal, by different mechanisms.",
   "new_cheapest_fix": "drop the AWQ calibration batch from 16 to 1-2 (the documented default is AWQ=16): logits tensor shrinks 8-16x, 4.64 GiB -> 0.29 GiB. Cheaper than waiting for a >=24 GB GPU and should be tried first.",
   "status": "+19~23% decode gain remains an UNVERIFIED PREDICTION (7 attempts, 0 successes)"
+ },
+ "lm_head_quantization_v9_SUCCESS": {
+  "date": "2026-07-27",
+  "attempt": 9,
+  "result": "BOTH 2B and 8B succeeded",
+  "the_one_change": "PATCH D on quantization/quantize.py:737 -- `batch_size = 16 if quantization in (None,'int4_awq') else 1` -> `batch_size = 1`",
+  "why_it_worked": "v7's error factorised as 4.64 GiB = calib_batch 16 x seq 512 x vocab 151936 x 4B(fp32) = the lm_head LOGITS tensor for the calibration batch. Batch 1 shrinks it 16x to 0.29 GiB. The first 8 attempts all searched the wrong axes (total VRAM, module placement); once the right axis was identified, attempt 9 passed both models on the first try.",
+  "placements": {
+   "2B": "device_map={'':0}, all on GPU0",
+   "8B": "max_memory={0:'12GiB',1:'12GiB'} -> {0: 16, 1: 25}, all on GPU, no CPU, no disk"
+  },
+  "cost": "190 min wall (vs 9-15 min for each failure) -- batch 16->1 makes calibration ~12x slower over the same 512 samples",
+  "artifact": "edge_artifacts_lmhead.tgz, 6.5 GB, contains Cosmos-2b_int4_awq_lmh-onnx + Cosmos-8b_int4_awq_lmh-onnx",
+  "CAVEAT_calibration_config_changed": "calib batch affects AWQ per-channel scale estimation, so the batch=1 model is NOT the same quantization config as the deployed batch=16 INT4. num_samples stays 512 so coverage is unchanged, but 'accumulated one-by-one' vs 'parallel within batch' differs.",
+  "still_unverified": "+19~23% decode gain. Remaining steps: pull artifact -> Orin llm_build -> llm_bench decode -> AND n=210 accuracy, reported alongside the batch=16 INT4. Reporting speed without accuracy would be claiming a win for a model whose recipe changed."
  }
 }
