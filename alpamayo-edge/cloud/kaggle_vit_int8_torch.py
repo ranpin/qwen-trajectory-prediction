@@ -159,7 +159,15 @@ print("[edge-patch] A(device_map) + B(to-dtype) + C(cpu-export) applied OK（本
 # PATCH E：在 quantize 流程里追加"量化 model.visual"（PyTorch 侧，绕开 ORT 跑不了插件的问题）
 # 注入点 = PATCH C 的锚点之前，此时 LLM 已量化完、模型仍在内存里、还没保存 checkpoint。
 # ---------------------------------------------------------------------------
-_E_old = '    _dm = getattr(model, "hf_device_map", None)'
+# 注意：PATCH C 是**插入**这一行的，所以 _E_old 只在 A/B/C 落盘之后才存在。
+# 而上面 open(QP,"w").write(...) 只写了文件、`_src` 变量仍是**原始**未打补丁的源码，
+# 因此这里必须**重新读回已打补丁的文件**，否则 E 的 needle 必然找不到（v1 就是这么失败的）。
+_src = open(QP).read()
+# needle 必须唯一：PATCH A 插入的行里也含"4 空格 + _dm = getattr(...)"这一段（它缩进 20 空格，
+# 但子串匹配照样命中）=> 只用那一行会 count==2，v1/v2 就是这么被断言拦下的。
+# 改为带上 C 特有的下一行，唯一性由 `if _dm and len(...)` 保证。
+_E_old = ('    _dm = getattr(model, "hf_device_map", None)\n'
+          '    if _dm and len({str(v) for v in _dm.values()}) > 1:')
 _E_new = (
     '    # ---- edge-patch E: quantize the vision tower in PyTorch (INT8) ----\n'
     '    try:\n'
@@ -229,7 +237,8 @@ _E_new = (
     '        print("EDGE_VIT_QUANT_FAILED:", type(_ee).__name__, _ee, flush=True)\n'
     '        _tb.print_exc()\n'
     '    # -------------------------------------------------------------------\n'
-    '    _dm = getattr(model, "hf_device_map", None)'
+    '    _dm = getattr(model, "hf_device_map", None)\n'
+    '    if _dm and len({str(v) for v in _dm.values()}) > 1:'
 )
 assert _src.count(_E_old) == 1, "PATCH E needle not found — TRTEdge source changed upstream"
 open(QP, "w").write(_src.replace(_E_old, _E_new))
