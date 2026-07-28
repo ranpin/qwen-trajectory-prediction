@@ -68,7 +68,7 @@
   }
  },
  "IMPORTANT_caveat": "校准 batch 16->1 是口径改动，会影响 AWQ per-channel scale 估计 ⇒ 精度必须另测（n=210），未测完之前不得把这里的提速当作'免费收益'。",
- "headroom_after": "8B 的有效带宽 153.1 GB/s ≈ 实测可达上限 152.3 GB/s ⇒ decode 路径已完全饱和，再要提速只能继续减字节（KV cache 量化在 sm_87 不可用，见 METHODOLOGY §3.5）。",
+ "headroom_after": "8B 的有效带宽 153.1 GB/s ≈ 实测可达上限 152.3 ⇒ **decode 这条路径**在'每 token 字节'不变的前提下已饱和。**更正（2026-07-28）**：我曾据此写成'量化侧穷尽'，这是过度概括。已证死的只有 W4A8（工具无实现）与手写 kernel（实测无余量）；视觉编码器 INT8（构建器不设精度 flag ⇒ 自插 QDQ 未测）、vocab reduction（工具有原生模块）、投机解码（不减字节、绕开带宽上限框架）三条仍未探明。见 METHODOLOGY §3.6。",
  "accuracy_n210": {
   "why": "校准 batch 16->1 是口径改动，会影响 AWQ per-channel scale ⇒ 必须与已部署版并列测精度，否则只报速度等于拿换了配方的模型宣称优化生效",
   "8B": {

@@ -79,7 +79,7 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 **自校验**：3.473 + 0.136 + 1.245 = **4.853 GB**，与实测引擎文件 4.847 GB 差 **+0.13%**；
 4.853 GB ÷ 实测 TPOT 33.1 ms = **146.5 GB/s**，为本机实测可达读带宽 152.3 GB/s 的 **96%**
 （⇒ 搬运效率已无余量，剩余收益只能来自减少字节；见 §1.6）。
-**lm_head 也量化为 INT4 后（2026-07-28 已实测）**：解析预测 4.853 → **3.932 GB**（−19%），实测引擎 **3.923 GB（误差 −0.23%）**；TPOT 30.73 → **25.69 ms（+19.6%）**，有效带宽升到 **153.1 GB/s ≈ 可达上限 152.3** ⇒ **decode 路径已完全饱和，量化侧穷尽**（视觉编码器与 KV cache 只有 fp8、sm_87 不支持；W4A8 工具里不存在，见 §3.5）。代价：n=210 正确率 −1.4 pts，且**归因有 confound**（同时改了校准 batch 16→1）。
+**lm_head 也量化为 INT4 后（2026-07-28 已实测）**：解析预测 4.853 → **3.932 GB**（−19%），实测引擎 **3.923 GB（误差 −0.23%）**；TPOT 30.73 → **25.69 ms（+19.6%）**，有效带宽升到 **153.1 GB/s ≈ 可达上限 152.3** ⇒ **decode 这条路径已完全饱和**——在"每 token 字节"不变的前提下无余量。**但这不等于量化侧穷尽**（2026-07-28 更正，见 §3.5 与 §3.6）：视觉编码器量化、vocab reduction、投机解码三条仍未探明。代价：n=210 正确率 −1.4 pts，且**归因有 confound**（同时改了校准 batch 16→1）。
 
 **实验之间的逻辑**：图 `docs/figures/experiment_logic.png`（脚本 `eval/experiment_logic.py`）——
 每一轮实验的结论就是下一轮的问题，含两条互斥提速路线的分叉与各自结局（一条被实测证否、一条第 9 次尝试成功）。
@@ -171,9 +171,11 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 |---|---|---|---|
 | **骨干** `--quantization` | fp8 / int4_awq / nvfp4 / mxfp8 / int8_sq | 仅 **int4_awq**、**int8_sq** | ✅ 两者都已部署实测 |
 | **lm_head** `--lm_head_quantization` | fp8 / int4_awq / nvfp4 / mxfp8 | **int4_awq** ✅ | ✅ **本轮执行**（decode 字节 −19%，预测 +23%） |
-| **视觉编码器** `--visual_quantization` | **仅 fp8** | ❌ | **不可行**：fp8 需 sm_89+，Orin 是 sm_87 |
+| **视觉编码器** `--visual_quantization` | **仅 fp8** | ⚠️ 开关不可用，**但非不可行** | fp8 需 sm_89+，Orin 是 sm_87 ⇒ **该开关**走不通。**但 `visualBuilder.cpp` 用通用 ONNX parser、`createBuilderConfig` 只设 `kMONITOR_MEMORY`（无任何精度 flag）⇒ 精度由 ONNX 自身决定**，自行插入 QDQ 走 TRT 显式量化是一条**未测试**的路线；sm_87 的 INT8 张量核是原生的（85 TOPS 稠密）。见 §3.6 |
 | **KV cache** `--kv_cache_quantization` | **仅 fp8** | ❌ | **不可行**：同上 |
 | **W4A8**（roofline 指出的 prefill 提速路径） | **工具中不存在**（全仓库 grep 无命中） | ❌ | **不可行**：需上游支持 |
+
+**（2026-07-28 更正：下面第 1 条已被推翻，视觉编码器并非不可行——见上表与 §3.6。保留原文以显示修订轨迹。）**
 
 三条不可行路径的意义：
 1. **视觉编码器 INT8 不可能**（不只是"要回云端"，而是工具只给 fp8、硬件又不支持 fp8）。视觉编码器占 TTFT 的
@@ -185,6 +187,25 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 ⇒ **在 sm_87 + TRTEdge 这个组合下，量化侧可做的优化在 lm_head 之后基本穷尽**。剩余收益需从
 **模型规模选择**（2B vs 8B）或**换框架**里找。校准集默认值也在此确认：`--dataset cnn_dailymail`、
 `--num_samples 512`（与 §4 记录一致）。
+
+### 3.6 未探明的量化路线（2026-07-28 更正 §3.5 的一处过度概括）
+
+§3.5 曾把三条路都标成"不可行"，其中**视觉编码器那条的判据不成立**，另有两条我当时根本没想到。
+如实分级如下（证据强度，而不是感觉）：
+
+| 路线 | 工具支持 | 证据强度 | 说明 |
+|---|---|---|---|
+| **视觉编码器 INT8** | `--visual_quantization` 只给 fp8 | ⚠️ **未证死** | 判据只覆盖"按工具设计的用法"。实查构建链：`visualBuilder.cpp` 用**通用 ONNX parser**，`builderUtils.cpp:257` 的 `createBuilderConfig` **只设 `kMONITOR_MEMORY`、无任何精度 flag** ⇒ **精度由 ONNX 决定**。故"自己给视觉 ONNX 插 QDQ（ModelOpt 的 ONNX PTQ，与该开关是不同代码路）+ TRT 显式量化"是一条未测路线；sm_87 的 INT8 张量核原生（85 TOPS 稠密 = FP16 的 2 倍）。**价值最高**：§1.7 测得 ViT 占 TTFT 19–25%，而 §1.10 的延迟预算显示真实分辨率下升到 **29–33%**，且 §1.4 已证权重量化对 prefill 无效 ⇒ 这是唯一一处量化还能打到主要成本的地方。 |
+| **vocab reduction** | `tensorrt_edgellm/vocab_reduction/` **原生模块** | ✅ 完全未探 | lm_head 是 4096×**151936**；即便量化成 INT4 仍占 3.93 GB 预算的 0.32 GB，词嵌入表另有 1.245 GB。词表砍到 32k 即 4.7×。对"只答一个字母"这类定格式任务语义安全。此前的分析里**一次都没提到过**。 |
+| **投机解码** | `llm_build --specDraft / --specBase`（EAGLE3 / MTP / DFlash） | ⚠️ 部分排除 | 它**不减每 token 字节**，而是让一次权重搬运产出多个 token ⇒ **直接绕开"decode 已达带宽上限"这个框架**。手上正好有已量化的 2B 可作 draft、8B 作 base。但 `config.py:1111` 明写 "MTP config parsing is only supported for Qwen3.5 checkpoints" 而我们是 `qwen3_vl` ⇒ **MTP 出局**；EAGLE3 / DFlash 对 `qwen3_vl` 是否支持**未核实**。 |
+| KV cache 量化 | 只给 fp8 | ⚠️ 较强但非证死 | 同为"开关不可用"。但 KV cache 是运行时 buffer、不是 ONNX 图的一部分，所以上面那条 QDQ 绕路**不适用** ⇒ 比视觉编码器站得住，仍不等于"已证不可行"。 |
+| **W4A8** | 全仓库 grep 无命中 | ✅ **已证死** | 不是开关问题，是实现不存在 ⇒ 需换框架。 |
+| **手写 kernel** | — | ✅ **已证死** | §1.6 实测 TRT 已达可达带宽 97.1%，lm_head 量化后更达 100%。 |
+
+**教训**：我把"按工具设计的用法走不通"写成了"不可行"，而这正是本项目方法论里那条
+"把未来工作降解为已证死路"的**误用**——那条的前提是**真的证死**。
+判断一条路是否死，必须查到**运行时/构建器层**（这次的关键证据就是 `createBuilderConfig` 里一个精度 flag 都没有），
+而不是停在 CLI 的 `choices=[...]`。
 
 ### 3.1 延迟 / 吞吐 —— `llm_bench`
 ```bash

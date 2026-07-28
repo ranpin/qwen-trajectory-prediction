@@ -265,8 +265,8 @@ footer a{color:var(--accent)}
     再次验证"静态量可精确预测、动态量只能给上界"：8B 实现了字节比上界 1.234× 的 <strong>84%</strong>；
     而 <strong>2B 反而超出上界</strong>（1.809× vs 上界 1.514×）—— 因为带宽效率同时从可达上限的 66% 升到 79%，
     去掉那个 M=1 却跑在 64 行 tile 上的 fp16 lm_head GEMM（占 2B decode 字节 46%）改善了访存形态（机制为推断）。<br>
-    <strong>量化侧到此穷尽</strong>：8B decode 的有效带宽 153.1 GB/s ≈ 实测可达上限 152.3 ⇒ 路径已完全饱和，
-    再提速只能继续减字节，而 KV cache 量化在 sm_87 不可用（§2.3）。<br>
+    <strong>decode 这一条到此饱和</strong>：8B 的有效带宽 153.1 GB/s ≈ 实测可达上限 152.3 ⇒ 在"每 token 字节"不变的前提下已无余量。<br>
+    <strong style="color:#b45309">⚠️ 但这不等于量化侧穷尽 —— 这是本页 2026-07-28 更正的一处过度概括。</strong>已证死的只有 <strong>W4A8</strong>（工具全仓库无实现）与 <strong>手写 kernel</strong>（实测已达可达带宽 97–100%）。另有三条<strong>仍未探明</strong>：<strong>① 视觉编码器 INT8</strong>——此前的判据只是"`--visual_quantization` 只给 fp8 而 sm_87 不支持 fp8"，但实查构建链发现 <code>visualBuilder.cpp</code> 用通用 ONNX parser、<code>createBuilderConfig</code> <strong>只设 kMONITOR_MEMORY、无任何精度 flag</strong> ⇒ 精度由 ONNX 决定，自插 QDQ 走 TRT 显式量化未被测试过（sm_87 的 INT8 张量核是原生的）；<strong>② vocab reduction</strong>——工具有原生模块，lm_head 宽 151936，砍到 32k 即 4.7×；<strong>③ 投机解码</strong>——<code>llm_build</code> 原生支持，且它不减字节而是让一次权重搬运产出多个 token，<strong>直接绕开"decode 已达带宽上限"这个框架</strong>（MTP 明确只支持 Qwen3.5 故出局，EAGLE3/DFlash 对 qwen3_vl 未核实）。而 <strong>ViT 的价值还在放大</strong>：§1.7 测得它占 TTFT 19–25%，§1.10 的预算显示真实分辨率下升到 <strong>29–33%</strong>，且 §1.4 已证权重量化对 prefill 无效 ⇒ 这是唯一一处量化还能打到主要成本的地方。分级见 <a href="https://github.com/ranpin/qwen-trajectory-prediction/blob/alpamayo-edge/alpamayo-edge/docs/METHODOLOGY.md" target="_blank" style="color:var(--accent)">METHODOLOGY §3.6</a>。<br>
     <strong>但不是免费的</strong>：8B 付了 −1.4 pts，且损失集中在更难的 robofail（59.0 → 55.0）；2B 则没付代价。
     <strong>⚠️ 归因有 confound</strong>：本次同时改了两件事（lm_head 量化 + 校准 batch 16→1），
     所以 −1.4 pts <strong>不能单独归因于 lm_head 量化</strong>；要隔离需再做一次"lm_head 保持 fp16 + batch=1"的对照，<strong>未做</strong>。
@@ -427,6 +427,7 @@ footer a{color:var(--accent)}
   </ul>
   <h3>诚实的边界</h3>
   <ul>
+    <li><strong>"量化侧穷尽"是本页曾犯的过度概括（2026-07-28 已更正）</strong>：lm_head 落地、decode 达可达带宽上限后，我据此写下"量化侧穷尽"。但复核发现<strong>只有 W4A8 与手写 kernel 真正被证死</strong>；视觉编码器 INT8 的原判据仅是"CLI 开关只给 fp8"，而构建器实际不设任何精度 flag（精度由 ONNX 决定）⇒ 自插 QDQ 未测；另外 <strong>vocab reduction 与投机解码两条我此前完全没想到</strong>，且后者不减字节、直接绕开"带宽上限"这个论证框架。<strong>教训</strong>：判一条路是否死，必须查到构建器/运行时层，不能停在 CLI 的 <code>choices=[...]</code>。分级见 METHODOLOGY §3.6。</li>
     <li><strong>辅助 perplexity 指标曾有截断 confound（自查发现，2026-07-27 已解决）</strong>：原先 <strong>INT4 有 8/12、INT8 有 6/12</strong> 条撞生成上限，且 FP16 参考侧用的是另一个上限（Kaggle 160 vs Orin 200）——<strong>被比较的两侧预算不一致</strong>，而 INT4 被截得更多却报出更小的 perplexity 增幅，所以"INT4 退化小于 INT8"有可能是假象。<strong>已两侧统一到 512 重跑</strong>（Orin 侧截断降到 2/12；FP16 侧输出中位长度 719→1248 字符）：结果 <strong>INT4 +9.1% / INT8 +15.6%</strong>，<strong>结论方向不变、原结论成立</strong>，但截断确实把差距夸大过（INT8/INT4 之比 1.85× → 1.71×）。两版数字都保留在表 5，不覆盖历史。主指标 MC 正确率自始不受影响（210×3 条全部 end-of-sequence、全部可解析）。</li>
     <li><strong>输入长度只剩 0.9% 余量（事后才发现）</strong>：引擎 <code>maxInputLen=1024</code> 是构建时钉死的；n=210 里最长的一题实测 <strong>1015 token</strong>（40 段 5:4 视频是 154 token/帧，6 帧就 924），<strong>只剩 9 个 token</strong>。日志无截断告警、210 条全部返回，故已发布正确率不受影响，但当初没算这笔账；要加帧数或加长题干必须以更大 <code>maxInputLen</code> 重建引擎（见图 2）。</li>
     <li><strong>基准范围</strong>：用 <strong>Cosmos-Reason1-Benchmark 的 robovqa+robofail（n=210，具身机器人推理，非驾驶）</strong>——这是 repo 内<strong>自带视频</strong>的全部；其余 3 子集(agibot/bridgev2/holoassist，共 300)仅有标注、视频需从外部源数据集下载匹配，官方 AV 子集未发布 → 全 510 需外部视频流水线(future work)。<strong>无 Cosmos-Reason2-Benchmark（不存在），故用同族的 R1-Benchmark 评测 R2 模型（标准做法）</strong>。视频按 6 帧@448 采样（非官方原生协议，绝对分不追求复现论文；三精度同帧→精度损失可比）。</li>
