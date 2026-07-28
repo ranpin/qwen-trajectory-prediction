@@ -121,6 +121,12 @@ footer a{color:var(--accent)}
       <tr><td>理论峰值 vs 可达上限</td><td>前者是规格书数字（本机 DRAM 204.8 GB/s），后者是这台机器实测真能跑到的（152.3 GB/s）。<strong>算优化余量必须用后者</strong>——用前者会高估（§1.6）。</td></tr>
       <tr><td>精度损失（pts）</td><td>正确率的百分点差（业内口语称"掉点"）。本文统一写"精度损失"，并区分它与 perplexity 的<strong>上升</strong>。</td></tr>
       <tr><td>MAXN · sm_87</td><td>MAXN = Orin 最高性能功耗模式；sm_87 = Orin GPU 的 CUDA 架构代号（Ampere）。</td></tr>
+      <tr><td><strong>随机基线</strong></td><td>本基准 210 题<strong>全是二选一 yes/no</strong>，瞎猜就有 50%。所以 76.2% 的"满分空间"只有 26.2 个百分点，正确率必须对着 50% 而不是 0% 来读（§1.2 表 4）。</td></tr>
+      <tr><td><strong>TPR / TNR</strong></td><td>敏感度 / 特异度。TPR = 真值为"是"时答对的比例（这里 = 识别"任务成功"的能力）；TNR = 真值为"否"时答对的比例（识别"失败"的能力）。两者<strong>分开看</strong>才能发现退化是否偏向某一侧——量化正是把阈值推向了"否"。</td></tr>
+      <tr><td><strong>平衡正确率</strong></td><td>(TPR + TNR) / 2。当模型偏向某一类时，它比普通正确率更公平。INT8 的平衡正确率 76.1% 几乎等于 FP16 的 76.2%，而普通正确率看起来掉了 1.0 pts。</td></tr>
+      <tr><td><strong>Cohen κ</strong></td><td>扣掉"碰巧猜对"之后的一致度（0 = 等于瞎猜，1 = 完全一致）。二选一任务里比正确率更能反映真实信号：FP16 0.520 / INT8 0.509 / INT4 0.481 / 2B 0.338。</td></tr>
+      <tr><td><strong>MDE 最小可检测效应</strong></td><td>在给定样本量与检验方法下，<strong>有 80% 概率能被发现</strong>的最小差异。本设计 MDE ≈ 6.7 pts ⇒ 观测到的 −2.4 pts <strong>低于分辨能力</strong>，所以"不显著"只能读作"<strong>没测出来</strong>"，不等于"没差异"。报了 MDE，"不显著"才有意义。</td></tr>
+      <tr><td><strong>opt 形状（TRT 优化 profile）</strong></td><td>TensorRT 建引擎时按 min/<strong>opt</strong>/max 三个形状挑 kernel，只有 opt 那一档是真正调优的。本工具把 <code>opt = maxInputLen/2</code> 写死，所以抬高输入上限会把调优点挪走——INT8 因此在原工作点慢 15%（§H2）。</td></tr>
     </table>
   </details>
 

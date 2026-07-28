@@ -112,6 +112,13 @@ Alpamayo 1.5 VLA（本项目部署的正是它的 VLM backbone）。
 | 困惑度 | Perplexity | 辅助指标；量化后**上升**（不是"掉点"） |
 | 统一内存 | Unified memory | Orin 的 CPU/GPU 共享内存（29 GB） |
 | 能效 | Energy efficiency | tokens/J = TPS ÷ 整机功耗 |
+| **随机基线** | Chance level | 本基准 210 题全为二选一 ⇒ **50%**。正确率须对着 50% 读，"满分空间"只有 26.2 pts |
+| **敏感度 / 特异度** | TPR / TNR (sensitivity / specificity) | 真值为"是"/"否"时各自的答对率。分开看才能发现退化是否偏向一侧 |
+| **平衡正确率** | Balanced accuracy | (TPR+TNR)/2；模型偏向某一类时比普通正确率公平 |
+| **Cohen κ** | Cohen's kappa | 扣除偶然一致后的一致度（0 = 瞎猜，1 = 完全一致） |
+| **最小可检测效应** | MDE, minimum detectable effect | 给定 n 与检验方法下 80% power 能发现的最小差异。本设计 ≈ 6.7 pts ⇒ 观测的 −2.4 pts 低于分辨能力，"不显著"= **没测出来**，不等于"没差异" |
+| **opt 形状** | TRT optimization profile opt shape | TRT 按 min/opt/max 三档挑 kernel，只有 opt 档真正调优；本工具把 `opt = maxInputLen/2` 写死（见 PROBLEMS H2） |
+| **校准批大小** | Calibration batch size | AWQ 默认 16。lm_head 量化时 logits 张量 = `batch × seq × vocab × 4 B`，是 OOM 的真正自变量（见 PROBLEMS G3） |
 
 ## 0. 来源与版本总表（全部实测，可追溯）
 
