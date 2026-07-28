@@ -161,6 +161,16 @@ footer a{color:var(--accent)}
     <li>多模态图像路径（视觉编码器 + deepstack + INT4 LLM）端到端验证正确。</li>
   </ul>
 
+  <div class="callout ok">
+    <div class="t">持续负载复核：31 分钟连续 decode，零降频（2026-07-28 补测）</div>
+    此前所有延迟数字都来自 <strong>10–200 次迭代的突发负载</strong>，而车上是连续跑的——降频会不会把它们推翻，一直没测。
+    现做 <strong>27 轮 × 2000 次迭代 = 1862 s 连续 decode</strong>（orin-dog，MAXN，batch 1，并行 tegrastats 1 s 采样）：<br>
+    <strong>TPOT 30.579–30.642 ms，均值 30.612，std 0.0167 ms</strong>；前 1/3 与后 1/3 相比漂移 <strong>−0.02%</strong>，全程极差仅占均值 <strong>0.21%</strong>。<br>
+    GPU 温度 44 °C → 峰值 70 °C → 收尾 69 °C（升 25 °C 后<strong>稳住</strong>），GR3D 利用率均值 90%，VDD_GPU_SOC 均值 30.5 W / 峰值 34.2 W。<br>
+    ⇒ <strong>突发负载测出的延迟在连续负载下依然成立</strong>，这台机器在 MAXN 下没有热节流余量问题。<br>
+    <span style="font-size:12.5px;color:var(--muted)">附带收益：27×2000 次迭代给出的 std 是 <strong>0.0167 ms</strong>，而最初 10 次迭代的 std 是 <strong>6.89 ms</strong>（均值的 20%）——方差降约 400 倍，TPOT 的真值钉在 <strong>30.61 ms</strong>，也回证了 200 迭代那次的 30.78 ms（差 0.5%）。数据 <code>eval/perf/sustained_30min.json</code>。</span>
+  </div>
+
   <h3>1.2 精度：真实基准任务正确率（vs FP16）</h3>
   <p>在<strong>官方 <a href="https://huggingface.co/datasets/nvidia/Cosmos-Reason1-Benchmark" target="_blank" style="color:var(--accent)">Cosmos-Reason1-Benchmark</a>（robovqa 子集，110 道选择题带标准答案）</strong>上实测<strong>任务正确率</strong>——具体场景 + ground truth，效果指标有实际意义。视频按 6 帧（≤448px）采样作多图，FP16/INT8/INT4 用同一批帧，精度损失严格可比。</p>
   <figure><img src="figures/benchmark_accuracy.png" alt="benchmark task accuracy"><figcaption><b>图 10 · 基准任务正确率（Cosmos-Reason1-Benchmark）</b><br><b>横轴</b>：三种精度（FP16 参考 / INT8 / INT4）<br><b>竖轴</b>：多选题任务正确率 %（误差棒=Wilson 95% 置信区间，绿虚线=FP16 76.2%）<br><b>结果</b>：n=210（robovqa 88.2% + 更难的 robofail 63%）FP16 76.2%、INT8 75.2%、INT4 73.8%；三者 <strong>CI 重叠、McNemar p&gt;0.4 → 差异统计不显著</strong><br><b>分析</b>：即使扩到 210、加入更难子集，量化仍<strong>无显著任务正确率损失</strong>，且分辨不出 INT4/INT8。二选一 MC 使 CI 仍 ±5.7；要更细分辨需上千样本或更难多选题（其余子集需外部视频，见边界）</figcaption></figure>
@@ -235,6 +245,32 @@ footer a{color:var(--accent)}
     <tr><td>B. 手写 W4A16 GEMV 提升带宽效率<br><span style="font-size:12px;color:var(--err)"><strong>← 已被 1.6 节实测推翻</strong></span></td><td>本以为 GEMV 只到「峰值」72.2% 尚有余量；但 <strong>该口径错了</strong>——分母应为实测可达带宽 152.3 GB/s，TRT 已达其 <strong>97.1%</strong></td><td>不变</td><td><span style="color:var(--err)">原预测 +10% 不成立</span><br>真实上限 ≈ <strong>+2%</strong> 端到端</td><td>见 1.6 节：此路基本不通</td></tr>
     <tr><td>A + B 叠加</td><td>B 已被推翻 ⇒ 实际可期的就是 A</td><td>−19%</td><td class="win">≈26.8 ms（<strong>+23%</strong>，来自 A）</td><td>—</td></tr>
   </table>
+
+  <div class="callout ok">
+    <div class="t">优化 A 收官：lm_head 也量化为 INT4 —— 第 9 次尝试成功，+19.6% 已实测（2026-07-28）</div>
+    §1.5 发现 lm_head 未被量化、独占 decode 字节 25.6% 后，这条优化<strong>失败了 8 次</strong>（见 PROBLEMS G3）。
+    第 9 次靠把报错数字做因式分解才找到真正的自变量：<code>4.64 GiB = 校准batch 16 × seq 512 × vocab 151936 × 4B</code>
+    ⇒ 瓶颈是校准批次的 <strong>logits</strong> 张量，与权重大小、模块放置<strong>都无关</strong>（所以"换成 2B"当时也失败）。
+    把 AWQ 校准 batch 降到 1 后，2B 与 8B 一次全过。<br><br>
+    <table style="margin:0">
+      <thead><tr><th>引擎</th><th>decode TPOT</th><th>提速</th><th>引擎大小</th><th>n=210 正确率</th><th>vs 各自基线</th></tr></thead>
+      <tbody>
+        <tr><td>INT4 8B（已部署）</td><td>30.73 ms</td><td>—</td><td>4.847 GB</td><td>73.8%</td><td>—</td></tr>
+        <tr><td><strong>INT4 8B + lm_head INT4</strong></td><td><strong>25.69 ms</strong></td><td><strong>+19.6%</strong></td><td><strong>3.923 GB</strong></td><td>72.4%</td><td><strong>−1.4 pts</strong>（p=0.169）</td></tr>
+        <tr><td>INT4 2B</td><td>13.41 ms</td><td>—</td><td>1.364 GB</td><td>65.2%</td><td>—</td></tr>
+        <tr><td><strong>INT4 2B + lm_head INT4</strong></td><td><strong>7.41 ms</strong></td><td><strong>+81%</strong></td><td><strong>0.903 GB</strong></td><td>65.7%</td><td>+0.5 pts（噪声内）</td></tr>
+      </tbody>
+    </table><br>
+    <strong>预测对账</strong>：事前写下 8B <strong>+19%</strong>，实测 <strong>+19.6%</strong>；引擎字节解析预测 3.932 GB vs 实测 3.923 GB，<strong>误差 −0.23%</strong>（2B 为 +0.89%）。
+    再次验证"静态量可精确预测、动态量只能给上界"：8B 实现了字节比上界 1.234× 的 <strong>84%</strong>；
+    而 <strong>2B 反而超出上界</strong>（1.809× vs 上界 1.514×）—— 因为带宽效率同时从可达上限的 66% 升到 79%，
+    去掉那个 M=1 却跑在 64 行 tile 上的 fp16 lm_head GEMM（占 2B decode 字节 46%）改善了访存形态（机制为推断）。<br>
+    <strong>量化侧到此穷尽</strong>：8B decode 的有效带宽 153.1 GB/s ≈ 实测可达上限 152.3 ⇒ 路径已完全饱和，
+    再提速只能继续减字节，而 KV cache 量化在 sm_87 不可用（§2.3）。<br>
+    <strong>但不是免费的</strong>：8B 付了 −1.4 pts，且损失集中在更难的 robofail（59.0 → 55.0）；2B 则没付代价。
+    <strong>⚠️ 归因有 confound</strong>：本次同时改了两件事（lm_head 量化 + 校准 batch 16→1），
+    所以 −1.4 pts <strong>不能单独归因于 lm_head 量化</strong>；要隔离需再做一次"lm_head 保持 fp16 + batch=1"的对照，<strong>未做</strong>。
+  </div>
 
   <h3>1.6 手写 kernel 对照：先量"上限"，再决定要不要优化</h3>
   <p>1.5 节给出的 B 项优化（手写 GEMV 把带宽效率从 72.2% 提上去）听起来诱人。但在动手写之前必须先回答一个问题：<strong>这台机器的 DRAM 到底能给多少带宽？</strong>「占理论峰值 72%」只有在硬件真能跑到 100% 时才意味着有 28% 可捞。于是先用自己写的纯流式读 kernel（1 GB、128-bit load）实测可达上限，再写三个版本的 W4A16 GEMV 与 TRT 对照。</p>
