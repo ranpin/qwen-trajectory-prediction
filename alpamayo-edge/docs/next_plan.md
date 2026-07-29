@@ -34,7 +34,49 @@
 - ② 真实分辨率研究（nuScenes 原生 1600×900 = 1450 token/帧，正好落在 4096 token 装 2 帧）
 - ③ Alpamayo VLA 轨道的 ADE/FDE（本项目部署的正是它的 VLM backbone）
 
-**入口**：nuScenes-mini（约 4 GB，一次下载）。
+**入口已改（2026-07-29 闸门 1 实测结论）：不用 nuScenes，用 NVIDIA 自己的 PhysicalAI-AV。**
+
+用户提醒"Alpamayo 本身好像有数据集"——**对，而且项目里早就识别过、只是从没接上**：
+`data/prepare_physicalai_av.py` 是一个 `NotImplementedError` 的空脚手架，注释里写明数据集是
+**NVIDIA PhysicalAI-Autonomous-Vehicles**（gated、133 TB，需用官方 `physical_ai_av` devkit 拉子集），
+且**轨迹规格与 Alpamayo 对齐：6.4 s 视界、64 路点 @ 10 Hz**。`data/av_subset/` 目前只有
+`synthetic_test.jsonl` 合成占位。
+
+### 闸门 1（数据可得性）—— ✅ 通过，实测记录
+
+| 数据集 | gated | 我们的 token | 内容 |
+|---|---|---|---|
+| `nvidia/PhysicalAI-Autonomous-Vehicles` | **auto**（接受许可即自动放行，非人工审批） | **HTTP 200，已有访问权** | 70,775 文件：51,891 `.zip`（传感器）+ 18,880 `.parquet`（标注/标定，**分 chunk ⇒ 可只拉子集**） |
+| `dgural/PhysicalAI-Autonomous-Vehicles-Sample` | **False（公开）** | 200 | 706 文件、**700 个 mp4**，命名含 `camera_front_wide_120fov` / `camera_cross_left_120fov` / `camera_front_tele_30fov` ⇒ **正是我们要的多相机行车视频** |
+
+**为什么它比 nuScenes 更对路**（三条都是实质性的，不只是"顺手"）：
+1. **同一厂商**：数据集与 Alpamayo / Cosmos 出自 NVIDIA 同一体系 ⇒ 相机 rig 与坐标系无需猜测适配；
+2. **轨迹规格已对齐**：6.4 s / 64 路点 / 10 Hz 正是 Alpamayo 的输出格式 ⇒ ADE/FDE 可直接算，
+   不必像 nuScenes 那样先写一层格式转换；
+3. **两级入口**：公开 sample 可立刻迭代（免 gate、体积小），gated 全集已可访问且分 chunk ⇒
+   ego 轨迹标注按需拉，**不必碰 133 TB**。
+
+**⇒ nuScenes-mini 降为备选**（仅在 PhysicalAI 的 ego 轨迹字段接不通时启用）。
+
+### 闸门 2（能否喂进现有预处理链）—— 下一步，尚未做
+
+具体动作（**先本地、几十 MB 级**，别一上来拉全集）：
+1. 从公开 sample 拉 **1 个 clip 的 `camera_front_wide_120fov.mp4`**，`ffprobe` 读原生分辨率与帧率
+   —— 这决定分辨率 Pareto 能扫到哪一档（若原生 ≥1080p，则 §1.10 里 2040 tok/帧 那档终于有真实数据）；
+2. 用 §0.0.1 那条链（均匀采 6 帧 → 长边缩放 → 32 对齐）产出 token 数，核对是否符合预期；
+3. 送进已建好的 `engines/int4_len4096` 跑一次，确认 4096 容量在真实分辨率下确实够用。
+
+### 闸门 3（能否构造带标准答案的评测）—— **真正的分水岭，尚未做**
+
+公开 sample 只有 mp4（700 个），**没有 QA 标注**。所以要么：
+- (a) 从 gated 全集的 `.parquet` 里找到可判定的标注（如目标框/红绿灯/可行驶区域），据此**自动生成**
+  yes/no 或多选题 + ground truth —— 这是最可信的路，但需先摸清 parquet 的 schema；
+- (b) 手工标一小批（n≈100），成本可控但样本量小、且我自己标会引入偏差，须声明；
+- (c) 都不行 ⇒ **退化为定性 demo，明确标注"无标注、不作为精度证据"**，并把"驾驶域定量评测缺失"
+  继续留在诚实边界里。
+
+### 闸门 4（Alpamayo 权重能否在 20 GB 内加载）—— 尚未做，与闸门 1–3 独立
+
 
 **半天侦察，按"最可能致命者优先"设闸门 —— 任一条不过就停，把受阻点写成结论而非 future work**
 
