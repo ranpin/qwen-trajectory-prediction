@@ -83,7 +83,9 @@ sh("cd /kaggle/working/TRTEdge && pip -q install '.[tools]'")
 # lm_head v9（两天前成功）几乎肯定跑在 4.x。脚本一直用 `>=4.51` 未设上界 ⇒ 主版本一发布就被带走。
 # 用 <5 而不是钉死某个小版本：既排除主版本破坏性变更，又不需要猜 v9 当天的确切版本
 # （那个版本没被记录 —— 这正是本次要修的缺口）。实际解析到的版本由 _fingerprint() 记录。
-sh("pip -q install 'transformers>=4.57,<5' 2>&1 | tail -2", check=False)
+# 注意：本脚本的 sh() 没有 check 参数（那是 recon 脚本的签名）——v7 就死在这个 TypeError。
+# 用 shell 层的 `|| true` 兜底，而不是给 sh() 传它不认识的关键字。
+sh("pip -q install 'transformers>=4.57,<5' 2>&1 | tail -2 || true")
 _fingerprint()   # 降级后再打一次指纹，确认真的生效
 
 
