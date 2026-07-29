@@ -22,6 +22,7 @@ sweep/多模态全套指标。详见 **[docs/edge_deploy_status.md](docs/edge_de
 | [docs/orin_build_notes.md](docs/orin_build_notes.md) | **工程日志**：正确 Orin 构建配方、复现命令、全部踩坑、FMHA 崩溃根因深挖 |
 | [docs/orin_goat_migration_plan.md](docs/orin_goat_migration_plan.md) | **64GB orin-goat 迁移计划**：补 FP16 性能基线 + 跨设备复现（32GB 机 FP16 build OOM 的解法） |
 | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | **方法与可复现性**：模型/权重来源、数据集、指标定义与测法、**量化校准集(cnn_dailymail 512)及影响分析** |
+| [docs/next_plan.md](docs/next_plan.md) | **后续实验规划（2026-07-29 重排）**：P0 驾驶域数据（含四道闸门与不通过时的处置）· P1 包装 · 明确不做的清单与理由 |
 | [docs/device_layout.md](docs/device_layout.md) | **文件放在哪**：1 台 Mac + 2 台 Orin + Kaggle 的目录布局、什么可重建/什么是单点、磁盘余量 |
 | [scripts/orin/](scripts/orin/) | 设备端脚本归档（功耗采样、建引擎+bench、FP16 回灌验证） |
 | [eval/accuracy/](eval/accuracy/) | 量化精度损失评测产物：prompts + Orin 输出 + FP16 参考 + 汇总脚本 |
