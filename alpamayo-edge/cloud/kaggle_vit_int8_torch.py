@@ -85,8 +85,17 @@ sh("cd /kaggle/working/TRTEdge && pip -q install '.[tools]'")
 # （那个版本没被记录 —— 这正是本次要修的缺口）。实际解析到的版本由 _fingerprint() 记录。
 # 注意：本脚本的 sh() 没有 check 参数（那是 recon 脚本的签名）——v7 就死在这个 TypeError。
 # 用 shell 层的 `|| true` 兜底，而不是给 sh() 传它不认识的关键字。
-sh("pip -q install 'transformers>=4.57,<5' 2>&1 | tail -2 || true")
-_fingerprint()   # 降级后再打一次指纹，确认真的生效
+# v8 证据：PATCH A 的 `[edge-patch] load kwargs:` **一行都没打印** ⇒ 被打补丁的那个
+# from_pretrained 调用点根本没执行到 ⇒ transformers 5.0.0 让 TRTEdge 走了另一个分支，
+# 多卡分片代码从未运行 ⇒ 单卡装 17.5 GB => 每次同一点 OOM，max_memory/batch 自然毫无影响。
+# 所以降级是对的方向，但 v8 的 `|| true` 把失败吞了、指纹又因模块缓存看不出来。
+# 这次：强制降级（允许改动其它依赖）+ **在子进程里**验证 + 不生效就立刻响亮失败。
+sh("pip install -q --force-reinstall 'transformers>=4.57,<5' 2>&1 | tail -3")
+sh("python -c \"import transformers,sys; v=transformers.__version__; print('[ver-subproc] transformers =', v); sys.exit(0 if v.split('.')[0]=='4' else 9)\"")
+print("[pin] transformers 已确认降到 4.x（子进程验证通过）", flush=True)
+
+# （原先这里再打一次 _fingerprint() 是**无效验证** —— importlib 返回 sys.modules 里
+#   已缓存的模块对象，观察不到磁盘上的降级。已改为上面的子进程验证。）
 
 
 # 2) Patch quantize.py: (A) multi-GPU load, (B) tolerate .to(dtype), (C) CPU-consolidate
