@@ -120,5 +120,13 @@
   "v8 的 pin 为何没救": "`pip -q install 'transformers>=4.57,<5' || true` 把失败吞了；而'降级后再打一次 _fingerprint()' 是**无效验证**（importlib 走 sys.modules 缓存，看不到磁盘降级）。",
   "v9(最后一次) 的改法": "`pip install --force-reinstall 'transformers>=4.57,<5'` + **在子进程里** `python -c 'import transformers; sys.exit(0 if major==4 else 9)'` 验证，不生效就立刻响亮失败。",
   "必要性重新评估_诚实": "§1.10 已定案：真实分辨率下系统是 0.3 Hz，而 AV 环路要 10–30 Hz，差 1–2 个数量级。ViT INT8 最好给端到端 10–15% ⇒ **不改变任何部署结论**。它的价值现在只是'闭环'，不是'改判'。**故 v9 之后无论成败都收尾，不再投入。**"
- }
+ },
+ "v9_结果_transformers 假设被推翻_结案": {
+  "结果": "降级**确实生效**（子进程验证 `[ver-subproc] transformers = 4.57.6`），但**同一个 OOM 原地重现**（32.00 MiB / GPU0 剩 4.81 MiB），且 `[edge-patch] load kwargs:` 与 `device placement:` **依然一行都不打印**。",
+  "结论": "**transformers 5.0.0 不是根因** —— 假设被自己的实验推翻。PATCH A 的 from_pretrained 调用点在 4.57.6 下同样没被执行到。",
+  "新的候选假设_未验证": "`sh(\"cd /kaggle/working/TRTEdge && pip -q install '.[tools]'\")` 是**非 editable 安装**（不是 `-e`），会把 TRTEdge **拷贝进 site-packages**；而我们打补丁的是 `/kaggle/working/TRTEdge/...` 下的**源码副本**。若 CLI 实际加载 site-packages 里的那份，补丁自然无效 —— 这与'assert 通过（补丁确实写进了那个文件）但代码没执行'完全吻合。**但 lm_head v9 用同一行安装却成功了**，所以这条也不自洽，需要实测（打印 `tensorrt_edgellm.__file__`）才能定论。",
+  "为什么就此结案": "① 已如实承诺 v9 是最后一次；② 必要性已重估：§1.10 定案系统在真实分辨率下 0.3 Hz vs AV 要 10–30 Hz，ViT INT8 最好给端到端 10–15% ⇒ **不改变任何部署结论**；③ 9 次尝试的边际产出已降到接近零，而每次仍要 10 min–12 h 云端时间。",
+  "留给将来的最小复现步骤": "若要重启，**第一步只需一行**：在 quantize 前 `sh(\"python -c 'import tensorrt_edgellm as m; print(m.__file__)'\")`，确认 CLI 加载的是哪份源码。这一步几十秒，能立刻证实/推翻上面那条候选假设 —— 而这本该是我第一次失败时就做的事。"
+ },
+ "最终状态": "出路①（PyTorch 侧量化 model.visual）**未跑通，也未证死**。9 次尝试全部卡在 `quantize llm` 的**模型加载**阶段，从未触及结构性问题（QDQ 能否活过 TRTEdge 的视觉导出包装器）。**所有收益数字（引擎约减半、算力上限翻倍）自始至终是解析预测、零实测**，不得写成已达成。"
 }
