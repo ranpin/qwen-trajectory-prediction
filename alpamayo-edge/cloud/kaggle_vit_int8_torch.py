@@ -76,6 +76,16 @@ sh(f"git -C /kaggle/working/TRTEdge checkout -q {TRTEDGE_PIN}")
 sh("git -C /kaggle/working/TRTEdge rev-parse --short HEAD")
 _fingerprint()
 sh("cd /kaggle/working/TRTEdge && pip -q install '.[tools]'")
+# 2026-07-29：**把 transformers 压回 4.x**。v6 的版本指纹拿到了决定性证据：
+#   [ver] transformers = 5.0.0，且 ModelOpt 自己 warn "transformers>=5.0 support is experimental"，
+#   同时 transformers 5.0 把 `torch_dtype` 弃用（日志里明确提示改用 `dtype`）——而 TRTEdge 传的
+#   正是 torch_dtype，这很可能就是 v3/v5 在 modeling_utils.py:3701 的 .to() 上 OOM 的直接来源。
+# lm_head v9（两天前成功）几乎肯定跑在 4.x。脚本一直用 `>=4.51` 未设上界 ⇒ 主版本一发布就被带走。
+# 用 <5 而不是钉死某个小版本：既排除主版本破坏性变更，又不需要猜 v9 当天的确切版本
+# （那个版本没被记录 —— 这正是本次要修的缺口）。实际解析到的版本由 _fingerprint() 记录。
+sh("pip -q install 'transformers>=4.57,<5' 2>&1 | tail -2", check=False)
+_fingerprint()   # 降级后再打一次指纹，确认真的生效
+
 
 # 2) Patch quantize.py: (A) multi-GPU load, (B) tolerate .to(dtype), (C) CPU-consolidate
 #    a sharded model before export. Each needle is asserted unique so an upstream
